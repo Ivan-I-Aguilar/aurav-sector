@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Control del sector · AURAV</title>
+<style>
+  :root { --tinta: #082440; --acento: #29b6f6; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe0ea; font-family: Arial, Helvetica, sans-serif; }
+  #lienzo { position: fixed; inset: 0; touch-action: none; }
+  #barra { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    background: linear-gradient(rgba(8,36,64,.72), rgba(8,36,64,0)); color: #fff; font-size: 15px; pointer-events: none; }
+  #barra b { letter-spacing: .02em; }
+  #barra .sep { flex: 1; }
+  #barra button { pointer-events: auto; }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+  #entrar-vr { background: var(--acento); color: var(--tinta); font-weight: bold; }
+  #salir { background: rgba(255,255,255,.18); color: #fff; width: 38px; }
+  #hud-tiempo { opacity: 0; transition: opacity .3s; }
+  body.jugando #hud-tiempo { opacity: 1; }
+  #ayuda { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(8,36,64,.7); color: #fff;
+    padding: 8px 14px; border-radius: 20px; font-size: 13px; white-space: nowrap; pointer-events: none; }
+  #final { display: none; position: fixed; right: 14px; bottom: 14px; width: min(380px, calc(100vw - 28px)); background: #fff; color: var(--tinta);
+    border-radius: 14px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  body.fin #final { display: block; }
+  body.fin #ayuda { display: none; }
+  #final input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #b8c7d3; border-radius: 8px; margin: 8px 0; font: inherit; }
+  #final pre { max-height: 140px; overflow: auto; font-size: 11px; background: #f2f6f9; padding: 8px; border-radius: 8px; white-space: pre-wrap; }
+  #copiar { background: var(--tinta); color: #fff; width: 100%; }
+  #empezar-pc { display: none; }
+  #mandos { display: none; position: fixed; left: 0; right: 0; bottom: 48px; padding: 0 16px; justify-content: space-between; pointer-events: none; }
+  body.manejando #mandos { display: flex; }
+  @media (pointer: fine) { body.manejando #mandos { display: none; } }
+  #mandos div { display: flex; gap: 10px; }
+  #mandos button { pointer-events: auto; width: 64px; height: 64px; border-radius: 50%; font-size: 26px; background: rgba(8,36,64,.65); color: #fff; touch-action: none; user-select: none; }
+  body.manejando #ayuda::after { content: ''; }
+</style>
+</head>
+<body>
+<div id="lienzo"></div>
+<div id="barra">
+  <b>AURAV · Control del sector</b>
+  <span id="hud-tiempo"></span>
+  <span class="sep"></span>
+  <button id="entrar-vr" hidden>Entrar en VR</button>
+  <button id="salir" title="Volver al inicio">✕</button>
+</div>
+<div id="ayuda">Arrastrá para mirar alrededor · tocá o hacé clic sobre lo que veas</div>
+<div id="mandos">
+  <div><button data-m="dir:1">◀</button><button data-m="dir:-1">▶</button></div>
+  <div><button data-m="acel:-1">▼</button><button data-m="acel:1">▲</button></div>
+</div>
+<div id="final">
+  <b>Resultado</b>
+  <input id="alumno" placeholder="Nombre del alumno">
+  <button id="copiar">Copiar resultado</button>
+  <pre id="resultado-texto"></pre>
+</div>
+<button id="empezar-pc"></button>
+<script type="module" src="./main.js?v=20260924-etapas"></script>
+</body>
+</html>

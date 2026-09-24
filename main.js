@@ -1,0 +1,483 @@
+// AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
+// La interfaz pregunta; mision.js decide.
+import * as THREE from './three.module.js';
+import { crearAT802 } from './at802.js';
+import { crearConjunto } from './vehiculos.js';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js';
+import { crearPersona, crearPiloto, caminarHacia } from './personajes.js';
+import { crearAudio } from './audio.js';
+import { Panel } from './panel.js';
+import { Mision, EVENTOS } from './mision.js';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js';
+import { Manejo, Entrada } from './manejo.js';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js';
+
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// ---------- Render, escena, jugador
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+document.getElementById('lienzo').appendChild(renderer.domElement);
+
+const escena = new THREE.Scene();
+const camara = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 900);
+const rig = new THREE.Group(); rig.add(camara); escena.add(rig);
+const POS_JUGADOR = V(-3.2, 0, 10.6); // afuera de la puntera del ala, detrás (zona verde)
+rig.position.copy(POS_JUGADOR);
+camara.position.y = 1.65;
+let yaw = 0.25, pitch = -0.08;
+function aplicarMirada() { camara.rotation.set(pitch, yaw, 0, 'YXZ'); }
+aplicarMirada();
+
+const ambiente = crearEscenario(escena);
+// Entorno de reflejos procedural (cielo/horizonte/suelo) para que metales y vidrios del avión y la cisterna no queden opacos.
+{
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256; const g = cv.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#6f97c0'); gr.addColorStop(0.48, '#e8eef2'); gr.addColorStop(0.52, '#9a9c8b'); gr.addColorStop(1, '#4a4f40');
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 256);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping;
+  const pm = new THREE.PMREMGenerator(renderer); escena.environment = pm.fromEquirectangular(t).texture; escena.environmentIntensity = 0.8; pm.dispose(); t.dispose();
+}
+const zonas = crearZonas(11); zonas.position.x = 0.4; escena.add(zonas);
+
+// Lado por el que se carga: en AAXOD se carga por cualquiera de las dos válvulas según dónde quede el avión
+// en la plataforma. El jugador y la motobomba están del lado +z, que en este modelo es el lado DERECHO del avión.
+const LADO_CARGA = 'derecho'; // 'izquierdo' | 'derecho'
+const avion = crearAT802(); escena.add(avion);
+avion.userData.ponerMotor(true);
+avion.updateMatrixWorld(true);
+const asiento = avion.getObjectByName('cabina-piloto');
+const piloto = crearPiloto(); piloto.position.set(0, -0.05, 0); asiento.add(piloto);
+const posAcople = avion.getObjectByName(LADO_CARGA === 'derecho' ? 'acople-carga-derecho' : 'acople-carga').getWorldPosition(new THREE.Vector3());
+
+const ESTACIONAMIENTO = { pos: V(-7.5, 0, 19.5), rumbo: 0.05 };     // A VALIDAR con AAXOD: lugar de la camioneta durante la carga
+const INICIO_LLEGADA = { pos: V(40, 0, 22), rumbo: Math.PI };         // llega desde adelante-derecha, con la nariz del avión a la vista
+const conjunto = crearConjunto({ anguloCisterna: 0.12 }); conjunto.position.copy(ESTACIONAMIENTO.pos); conjunto.rotation.y = ESTACIONAMIENTO.rumbo; escena.add(conjunto);
+// rectángulo de estacionamiento pintado en el piso
+{
+  const g = new THREE.Group(); const mLinea = new THREE.MeshBasicMaterial({ color: 0xf2c200 });
+  const L = 11, A = 3.8, e = 0.12;
+  for (const [w, d, x, z] of [[L, e, 0, A / 2], [L, e, 0, -A / 2], [e, A, L / 2, 0], [e, A, -L / 2, 0]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, d), mLinea); m.position.set(x, 0.03, z); g.add(m); }
+  g.position.set(ESTACIONAMIENTO.pos.x - 2.2, 0, ESTACIONAMIENTO.pos.z); g.rotation.y = ESTACIONAMIENTO.rumbo; escena.add(g);
+}
+const manejo = new Manejo(conjunto), entrada = new Entrada();
+const llegada = new Llegada({ pos: V(0.4, 0, 0), rumbo: 0 }, ESTACIONAMIENTO.pos);
+const ASIENTO_CHOFER = V(-0.35, -0.2, -0.42); // respecto del origen de la camioneta (piso); la cámara suma su propia altura
+// ---------- Etapa 2: aproximación a pie
+const caminata = new Caminata({ pos: V(0.4, 0, 0), rumbo: 0 }, posAcople.clone().setY(0), POS_JUGADOR);
+const VEL_CAMINAR = 1.6;
+function marcador(color) {
+  const g = new THREE.Group(); g.visible = false;
+  const anillo = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+  anillo.rotation.x = -Math.PI / 2; anillo.position.y = 0.04; g.add(anillo);
+  const flecha = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.4, 10), new THREE.MeshBasicMaterial({ color })); flecha.rotation.x = Math.PI; flecha.position.y = 1.9; g.add(flecha);
+  g.userData.actualizar = dt => { flecha.position.y = 1.9 + Math.sin(performance.now() / 300) * 0.1; flecha.rotation.y += dt * 2; };
+  escena.add(g); return g;
+}
+const marcaValvula = marcador(0x29b6f6), marcaPuesto = marcador(0x2fbf4a);
+marcaValvula.position.set(posAcople.x, 0, posAcople.z + 0.9); marcaPuesto.position.copy(POS_JUGADOR);
+function panelIntroCaminata() {
+  pausa = true;
+  panel.mostrar({ eyebrow: 'Etapa 2 · Aproximación a pie', titulo: 'Caminá hasta la válvula', texto: TXT_CAMINATA.intro, botones: [{ texto: 'Empezar a caminar', id: 'caminar' }] });
+  colocarPanel(panel);
+  accionPanel = id => { if (id === 'caminar') empezarCaminata(); };
+}
+function empezarCaminata() {
+  audio.reanudar(); if (!sonidoTurbina.isPlaying) sonidoTurbina.play();
+  if (rig.parent !== escena) escena.add(rig);
+  // baja por la puerta del chofer, al lado de la camioneta estacionada
+  const p = conjunto.position.clone().add(V(0, 0, -1.6).applyAxisAngle(V(0, 1, 0), conjunto.rotation.y)); rig.position.set(p.x, 0, p.z);
+  rig.rotation.y = 0; yaw = Math.atan2(-(posAcople.x - p.x), -(posAcople.z - p.z)); pitch = -0.05; aplicarMirada();
+  caminata.empezar(); marcaValvula.visible = true; panel.ocultar(); pausa = false;
+  document.body.classList.add('jugando', 'manejando');
+  document.getElementById('ayuda').textContent = 'W/S o ▲▼: caminar · A/D: de costado · flechas ◀▶: girar · Quest: palanca izquierda camina, derecha gira';
+}
+function panelAvisoCaminata(tx, grave) {
+  pausa = true;
+  panel.mostrar({ eyebrow: 'Etapa 2 · Aproximación a pie', borde: grave ? '#d32f2f' : '#f2c200', titulo: tx.titulo, texto: tx.texto, botones: [{ texto: 'Seguir', id: 'seguir' }] });
+  colocarPanel(panel);
+  accionPanel = () => { panel.ocultar(); pausa = false; };
+}
+function panelValvula() {
+  pausa = true; marcaValvula.visible = false; marcaPuesto.visible = true;
+  panel.mostrar({ eyebrow: 'Etapa 2 · Aproximación a pie', borde: '#2e9e5b', titulo: TXT_CAMINATA.valvula.titulo, texto: TXT_CAMINATA.valvula.texto, botones: [{ texto: 'Volver al puesto', id: 'seguir' }] });
+  colocarPanel(panel);
+  accionPanel = () => { panel.ocultar(); pausa = false; };
+}
+function panelFinCaminata() {
+  pausa = true; marcaPuesto.visible = false;
+  const f = caminata.fin;
+  panel.mostrar({ eyebrow: 'Etapa 2 · Aproximación a pie', borde: '#2e9e5b', titulo: `${TXT_CAMINATA.puesto.titulo} · Nota ${f.nota}/100`,
+    texto: [TXT_CAMINATA.puesto.texto, ...f.detalle.map(d => `· ${d.titulo}: ${d.texto}`)], botones: [{ texto: 'Empezar la carga', id: 'carga' }] });
+  colocarPanel(panel);
+  accionPanel = () => { document.body.classList.remove('manejando'); rig.position.copy(POS_JUGADOR); panel.ocultar(); document.getElementById('ayuda').textContent = 'Arrastrá para mirar alrededor · tocá o hacé clic sobre lo que veas'; empezar(); };
+}
+function caminar(dt) {
+  const { adelante, lateral, giro } = entrada.leerCaminar(renderer.xr.isPresenting ? controles : []);
+  if (giro) { yaw += giro * dt * 1.6; aplicarMirada(); }
+  if (!adelante && !lateral) return;
+  const dir = camara.getWorldDirection(new THREE.Vector3()); dir.y = 0; dir.normalize();
+  const lado = V(dir.z, 0, -dir.x);
+  rig.position.addScaledVector(dir, adelante * VEL_CAMINAR * dt).addScaledVector(lado, -lateral * VEL_CAMINAR * dt);
+  rig.position.y = 0;
+}
+const POS_BOMBA = V(-4.4, 0, 12.2);
+const equipo = crearEquipoCarga(POS_BOMBA, posAcople); escena.add(equipo);
+
+// ---------- Audio
+const audio = crearAudio(camara);
+const sonidoTurbina = audio.posicional(avion.getObjectByName('helice'), audio.buffers.turbina, { loop: true, volumen: 1.1, ref: 7 });
+
+// ---------- Actores de cada situación
+const mision = new Mision();
+const actores = {};
+function proxy(radio, padre, pos = V(0, 0, 0)) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(radio, 10, 8), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }));
+  m.position.copy(pos); padre.add(m); return m;
+}
+function persona(tipo, inicio, destino, salida, vel = 1.25) {
+  const p = crearPersona(tipo); p.position.copy(inicio); p.visible = false; escena.add(p);
+  const hit = proxy(0.75, p, V(0, 1.0, 0));
+  return { obj: p, hit, inicio, destino, salida, vel, fase: 'oculto',
+    aparecer() { p.position.copy(inicio); p.visible = true; this.fase = 'entra'; },
+    retirar() { this.fase = 'sale'; },
+    actualizar(dt) {
+      p.userData.actualizar(dt);
+      if (this.fase === 'entra') { if (caminarHacia(p, destino, vel, dt)) this.fase = 'espera'; }
+      else if (this.fase === 'espera') { const d = V(POS_JUGADOR.x - p.position.x, 0, POS_JUGADOR.z - p.position.z); p.rotation.y = Math.atan2(-d.z, d.x); }
+      else if (this.fase === 'sale') { if (caminarHacia(p, salida, vel * 1.3, dt)) { p.visible = false; this.fase = 'oculto'; } }
+    } };
+}
+actores.brigadista = persona('brigadista', V(18, 0, 15), V(6.8, 0, 3.0), V(22, 0, 22));
+actores.periodista = persona('periodista', V(-4, 0, 36), V(-2.4, 0, 13.4), V(-5, 0, 42), 1.1);
+actores.curioso = persona('vecino', V(-13, 0, 18), V(-13, 0, -9), V(-13, 0, -30), 0.9);
+actores.bombero = persona('bombero', V(-6.5, 0, 16), V(0.4, 0, 2.4), V(-8, 0, 22), 1.0);
+// el vecino no se queda quieto: cruza toda la cola
+actores.curioso.actualizar = function (dt) {
+  const p = this.obj; p.userData.actualizar(dt);
+  if (this.fase === 'entra') { if (caminarHacia(p, this.destino, this.vel, dt)) { [this.inicio, this.destino] = [this.destino, this.inicio]; } }
+  else if (this.fase === 'sale') { if (caminarHacia(p, V(-13, 0, 30), 1.4, dt)) { p.visible = false; this.fase = 'oculto'; } }
+};
+
+// Celular: suena a tu lado, a la altura de la cintura
+{
+  const g = new THREE.Group(); g.visible = false; rig.add(g); g.position.set(0.3, 1.0, -0.35);
+  const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0x111111 })); g.add(cuerpo);
+  const pantalla = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.14), new THREE.MeshBasicMaterial({ color: 0x7fd3ff })); pantalla.position.z = 0.007; g.add(pantalla);
+  g.rotation.x = -0.5;
+  const son = audio.posicional(g, audio.buffers.celular, { loop: true, volumen: 1.4, ref: 1 });
+  const hit = proxy(0.22, g);
+  let t = 0;
+  actores.celular = { obj: g, hit, aparecer() { g.visible = true; son.play(); }, retirar() { g.visible = false; son.isPlaying && son.stop(); },
+    actualizar(dt) { if (g.visible) { t += dt; g.position.y = 1.0 + Math.sin(t * 30) * 0.004; pantalla.material.color.setHSL(0.55, 0.9, 0.6 + 0.2 * Math.sin(t * 8)); } } };
+}
+// Radio portátil: te llama el Coordinador
+{
+  const g = new THREE.Group(); g.visible = false; rig.add(g); g.position.set(-0.32, 1.0, -0.3);
+  const c = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.035), new THREE.MeshStandardMaterial({ color: 0x1a1a1a })); g.add(c);
+  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.1, 6), new THREE.MeshStandardMaterial({ color: 0x1a1a1a })); ant.position.set(0.018, 0.12, 0); g.add(ant);
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 4), new THREE.MeshBasicMaterial({ color: 0x33ff66 })); led.position.set(-0.018, 0.08, 0.02); g.add(led);
+  const son = audio.posicional(g, audio.buffers.radio, { loop: true, volumen: 1.3, ref: 1 });
+  const hit = proxy(0.22, g); let t = 0;
+  actores.radio = { obj: g, hit, aparecer() { g.visible = true; son.play(); }, retirar() { g.visible = false; son.isPlaying && son.stop(); },
+    actualizar(dt) { if (g.visible) { t += dt; led.visible = Math.sin(t * 10) > 0; } } };
+}
+// Bolsa de nailon que el viento arrastra hacia adelante del avión
+{
+  const g = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 1), new THREE.MeshStandardMaterial({ color: 0xf3f3f0, transparent: true, opacity: 0.85, roughness: 0.3, flatShading: true }));
+  g.geometry.attributes.position.array.forEach((_, i, a) => { if (i % 3 === 1) a[i] *= 0.6; a[i] *= 0.85 + Math.random() * 0.3; });
+  g.geometry.computeVertexNormals(); g.visible = false; g.castShadow = true; escena.add(g);
+  const hit = proxy(0.6, g);
+  const desde = V(-1.2, 0.2, 5.0), hacia = V(5.2, 0.2, 2.6); let t = 0;
+  actores.bolsa = { obj: g, hit, aparecer() { g.position.copy(desde); g.visible = true; t = 0; }, retirar() { g.visible = false; },
+    actualizar(dt) {
+      if (!g.visible) return; t += dt;
+      const k = Math.min(1, t / 26); g.position.lerpVectors(desde, hacia, k);
+      g.position.y = 0.2 + Math.abs(Math.sin(t * 2.3)) * 0.35; g.rotation.x += dt * 3; g.rotation.z += dt * 2;
+    } };
+}
+// Piloto que hace señas
+{
+  const hit = proxy(0.9, piloto, V(0, 0.5, 0));
+  actores.piloto = { obj: piloto, hit, aparecer() { piloto.userData.seña = true; }, retirar() { piloto.userData.seña = false; }, actualizar(dt) { piloto.userData.actualizar(dt); } };
+}
+
+// ---------- Tableros
+const panel = new Panel(1.3, 0.9); escena.add(panel.mesh);
+const hudPanel = new Panel(0.5, 0.12); // reloj chico en el visor
+function colocarPanel(p, dist = 1.35, bajar = 0.12) {
+  const pos = camara.getWorldPosition(new THREE.Vector3());
+  const dir = camara.getWorldDirection(new THREE.Vector3()); dir.y = 0; dir.normalize();
+  p.mesh.position.copy(pos).addScaledVector(dir, dist); p.mesh.position.y = pos.y - bajar;
+  p.mesh.lookAt(pos.x, p.mesh.position.y, pos.z);
+}
+
+let pausa = false;       // un tablero de aviso detiene el reloj de la carga
+let accionPanel = null;  // qué hacer con el botón elegido
+
+function panelIntro() {
+  pausa = true;
+  panel.mostrar({
+    eyebrow: 'AURAV · AAXOD · Prototipo de demostración', titulo: 'Control del sector',
+    texto: ['Sos el Equipo de Tierra. El AT-802 está cargando agua por la válvula derecha con el motor en marcha y vos sos responsable del sector.',
+      'Durante la carga van a pasar cosas a tu alrededor. Mirá para todos lados: cuando veas algo, apuntalo y elegí qué hacer.',
+      'Basado en el MOE Vol. I de AAXOD. Contenido a validar por la Dirección de Operaciones.'],
+    botones: [{ texto: 'Etapa 1 · Llegar con la camioneta', id: 'llegada', fuente: 30 }, { texto: 'Etapa 2 · Acercarse a pie', id: 'caminata', fuente: 30 }, { texto: 'Etapa 3 · Ir directo a la carga', id: 'empezar', fuente: 30 }], altoBoton: 62,
+  });
+  colocarPanel(panel);
+  accionPanel = id => { if (id === 'empezar') empezar(); if (id === 'llegada') panelIntroLlegada(); if (id === 'caminata') panelIntroCaminata(); };
+}
+// ---------- Etapa 1: llegada manejando la camioneta
+function panelIntroLlegada() {
+  pausa = true;
+  panel.mostrar({ eyebrow: 'Etapa 1 · Llegada al sector', titulo: 'Manejá la camioneta', texto: TXT_LLEGADA.intro, botones: [{ texto: 'Subir a la camioneta', id: 'subir' }] });
+  colocarPanel(panel);
+  accionPanel = id => { if (id === 'subir') empezarLlegada(); };
+}
+function subirALaCamioneta() {
+  conjunto.add(rig); rig.position.copy(ASIENTO_CHOFER); rig.rotation.y = -Math.PI / 2; yaw = 0; pitch = -0.05; aplicarMirada();
+}
+function bajarDeLaCamioneta() {
+  escena.add(rig); rig.position.copy(POS_JUGADOR); rig.rotation.y = 0; yaw = 0.25; pitch = -0.08; aplicarMirada();
+}
+function empezarLlegada() {
+  audio.reanudar(); if (!sonidoTurbina.isPlaying) sonidoTurbina.play();
+  manejo.colocar(INICIO_LLEGADA.pos.x, INICIO_LLEGADA.pos.z, INICIO_LLEGADA.rumbo);
+  subirALaCamioneta();
+  llegada.empezar(); manejo.activo = true; panel.ocultar(); pausa = false;
+  document.body.classList.add('jugando', 'manejando');
+  document.getElementById('ayuda').textContent = 'W/S o ▲▼: acelerar y frenar · A/D o ◀▶: doblar · Quest: palanca izquierda acelera, derecha dobla';
+}
+function panelAvisoLlegada(tx) {
+  manejo.activo = false; manejo.vel = 0; pausa = true;
+  panel.mostrar({ eyebrow: 'Etapa 1 · Llegada al sector', borde: '#d32f2f', titulo: tx.titulo, texto: tx.texto, botones: [{ texto: 'Seguir manejando', id: 'seguir' }] });
+  colocarPanel(panel);
+  accionPanel = () => { panel.ocultar(); pausa = false; manejo.activo = true; };
+}
+function panelFinLlegada() {
+  manejo.activo = false; manejo.vel = 0; pausa = true;
+  const f = llegada.fin;
+  panel.mostrar({ eyebrow: 'Etapa 1 · Llegada al sector', borde: '#2e9e5b', titulo: `${TXT_LLEGADA.llegada.titulo} · Nota ${f.nota}/100`,
+    texto: [TXT_LLEGADA.llegada.texto, ...f.detalle.map(d => `· ${d.titulo}: ${d.texto}`)], botones: [{ texto: 'Bajar y controlar el sector', id: 'bajar' }] });
+  colocarPanel(panel);
+  accionPanel = () => { document.body.classList.remove('manejando'); panel.ocultar(); panelIntroCaminata(); };
+}
+function textoResultadoCompleto(nombre) {
+  const t = mision.textoResultado(nombre);
+  return t + (llegada.fin ? '\n\n' + llegada.textoResultado() : '') + (caminata.fin ? '\n\n' + caminata.textoResultado() : '');
+}
+function empezar() {
+  audio.reanudar();
+  if (!sonidoTurbina.isPlaying) sonidoTurbina.play();
+  mision.empezar(); panel.ocultar(); pausa = false;
+  document.body.classList.add('jugando');
+}
+
+let ordenActual = [];
+function panelPregunta(id, avisoTexto) {
+  const i = EVENTOS.findIndex(e => e.id === id), e = EVENTOS[i];
+  ordenActual = [0, 1, 2].map(k => (k + i) % 3);
+  panel.mostrar({
+    eyebrow: `Situación ${i + 1} de ${EVENTOS.length}`, titulo: e.titulo, texto: e.pregunta,
+    aviso: avisoTexto, botones: ordenActual.map(o => ({ texto: e.opciones[o], id: o, fuente: 30 })), altoBoton: 100,
+  });
+  colocarPanel(panel);
+  accionPanel = opcion => {
+    const r = mision.responder(opcion);
+    if (!r) return;
+    if (r.correcto) { audio.ok(); actores[id].retirar(); panelExplicacion(e, true); }
+    else { audio.mal(); panelPregunta(id, 'No es lo indicado. ' + r.pista); }
+  };
+}
+function panelExplicacion(e, bien) {
+  pausa = true;
+  panel.mostrar({
+    eyebrow: bien ? 'Correcto' : 'No lo detectaste a tiempo', borde: bien ? '#2e9e5b' : '#d32f2f',
+    titulo: e.titulo, texto: e.pista, botones: [{ texto: 'Seguir con la carga', id: 'seguir' }],
+  });
+  colocarPanel(panel);
+  accionPanel = () => { panel.ocultar(); pausa = false; if (mision.fase === 'fin') panelFin(); };
+}
+function panelFin() {
+  pausa = true; sonidoTurbina.isPlaying && sonidoTurbina.stop();
+  avion.userData.ponerMotor(false);
+  const f = mision.fin;
+  const lineas = f.detalle.map((d, i) => `${i + 1}. ${d.titulo}: ${d.texto}`);
+  panel.mostrar({
+    eyebrow: 'Carga terminada', titulo: `Nota ${f.nota}/100`,
+    texto: [`Detectaste ${f.detectados} de ${f.total} situaciones · ${f.sinErrores} sin errores.`, ...lineas],
+    botones: [{ texto: 'Volver a empezar', id: 'reiniciar' }], altoBoton: 80,
+  });
+  if (caminata.fin) lineas.unshift(`Etapa 2 (a pie): nota ${caminata.fin.nota}/100`);
+  if (llegada.fin) lineas.unshift(`Etapa 1 (llegada): nota ${llegada.fin.nota}/100`);
+  colocarPanel(panel, 1.45, 0.02);
+  accionPanel = () => reiniciar();
+  document.body.classList.add('fin');
+  document.getElementById('resultado-texto').textContent = textoResultadoCompleto('');
+}
+function reiniciar() {
+  for (const a of Object.values(actores)) { a.retirar(); if (a.obj.isGroup && a.fase !== undefined) { a.obj.visible = false; a.fase = 'oculto'; } }
+  actores.piloto.retirar();
+  mision.reset(); avion.userData.ponerMotor(true);
+  caminata.reset(); marcaValvula.visible = marcaPuesto.visible = false;
+  llegada.reset(); manejo.activo = false; manejo.colocar(ESTACIONAMIENTO.pos.x, ESTACIONAMIENTO.pos.z, ESTACIONAMIENTO.rumbo); conjunto.userData.cisterna.rotation.y = 0.12;
+  if (rig.parent !== escena) bajarDeLaCamioneta();
+  document.body.classList.remove('fin', 'jugando', 'manejando');
+  panelIntro();
+}
+
+// ---------- Selección: mouse / dedo / controles
+const ray = new THREE.Raycaster();
+function objetivos() {
+  if (panel.mesh.visible) return [panel.mesh];
+  return mision.activos.map(id => actores[id].hit);
+}
+function probar(origen, direccion, elegir) {
+  ray.set(origen, direccion); ray.far = 60;
+  const hits = ray.intersectObjects(objetivos(), false);
+  if (!hits.length) { if (panel.mesh.visible) panel.setHover(-1); return false; }
+  const h = hits[0];
+  if (h.object === panel.mesh) {
+    const b = panel.botonEn(h.uv); panel.setHover(b);
+    if (elegir && b >= 0) { const id = panel.idBoton(b); accionPanel && accionPanel(id); }
+    return true;
+  }
+  if (elegir) {
+    const id = mision.activos.find(k => actores[k].hit === h.object);
+    if (id && mision.detectar(id)) { audio.aviso(); panelPregunta(id); }
+  }
+  return true;
+}
+
+// Mouse y táctil: arrastrar para mirar, tocar sin arrastrar para elegir
+const puntero = new THREE.Vector2(); let arrastre = null;
+renderer.domElement.addEventListener('pointerdown', e => { arrastre = { x: e.clientX, y: e.clientY, yaw, pitch, movio: false }; renderer.domElement.setPointerCapture(e.pointerId); });
+renderer.domElement.addEventListener('pointermove', e => {
+  puntero.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  if (arrastre) {
+    const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
+    if (Math.hypot(dx, dy) > 6) arrastre.movio = true;
+    if (arrastre.movio) { yaw = arrastre.yaw + dx * 0.004; pitch = THREE.MathUtils.clamp(arrastre.pitch + dy * 0.003, -1.2, 1.0); aplicarMirada(); }
+  }
+});
+renderer.domElement.addEventListener('pointerup', e => {
+  if (arrastre && !arrastre.movio) { puntero.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); ray.setFromCamera(puntero, camara); probar(ray.ray.origin.clone(), ray.ray.direction.clone(), true); }
+  arrastre = null;
+});
+addEventListener('keydown', e => { if (caminata.fase === 'valvula' || caminata.fase === 'puesto') return; if (e.key === 'ArrowLeft') { yaw += 0.2; aplicarMirada(); } if (e.key === 'ArrowRight') { yaw -= 0.2; aplicarMirada(); } });
+
+// Controles del Quest
+const controles = [0, 1].map(i => {
+  const c = renderer.xr.getController(i); rig.add(c);
+  const linea = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0, 0, 0), V(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x29b6f6 }));
+  linea.scale.z = 8; c.add(linea);
+  const punta = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: 0x29b6f6 })); c.add(punta);
+  c.addEventListener('select', () => { const { o, d } = rayoDe(c); probar(o, d, true); });
+  c.addEventListener('connected', ev => { c.userData.fuente = ev.data; });
+  return c;
+});
+function rayoDe(c) {
+  const m = new THREE.Matrix4().extractRotation(c.matrixWorld);
+  return { o: new THREE.Vector3().setFromMatrixPosition(c.matrixWorld), d: V(0, 0, -1).applyMatrix4(m).normalize() };
+}
+let giroListo = true;
+function giroConPalanca() {
+  for (const c of controles) {
+    const gp = c.userData.fuente?.gamepad; if (!gp) continue;
+    const x = gp.axes[2] ?? 0;
+    if (Math.abs(x) > 0.7 && giroListo) {
+      giroListo = false;
+      const cabeza = camara.getWorldPosition(new THREE.Vector3());
+      rig.position.sub(cabeza).applyAxisAngle(V(0, 1, 0), -Math.sign(x) * Math.PI / 4).add(cabeza);
+      rig.rotation.y -= Math.sign(x) * Math.PI / 4;
+    }
+    if (Math.abs(x) < 0.3) giroListo = true;
+  }
+}
+
+// Entrar en VR
+const botonVR = document.getElementById('entrar-vr');
+if (navigator.xr) navigator.xr.isSessionSupported('immersive-vr').then(ok => { if (ok) botonVR.hidden = false; });
+botonVR.addEventListener('click', async () => {
+  const s = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
+  camara.position.set(0, 0, 0); camara.rotation.set(0, 0, 0);
+  await renderer.xr.setSession(s);
+  audio.reanudar();
+  s.addEventListener('end', () => { camara.position.y = 1.65; aplicarMirada(); rig.rotation.y = 0; rig.position.copy(POS_JUGADOR); });
+  setTimeout(() => panel.mesh.visible && colocarPanel(panel), 400);
+});
+document.getElementById('empezar-pc').addEventListener('click', () => { if (mision.fase === 'intro') empezar(); });
+{ // mandos táctiles para celular
+  const m = { acel: 0, dir: 0 };
+  for (const b of document.querySelectorAll('#mandos button')) {
+    const [k, v] = b.dataset.m.split(':');
+    const on = e => { e.preventDefault(); m[k] = +v; entrada.setTactil(m.acel, m.dir); };
+    const off = e => { e.preventDefault(); m[k] = 0; entrada.setTactil(m.acel, m.dir); };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+  }
+}
+document.getElementById('salir').addEventListener('click', () => reiniciar());
+document.getElementById('copiar').addEventListener('click', async () => {
+  const txt = textoResultadoCompleto(document.getElementById('alumno').value.trim());
+  try { await navigator.clipboard.writeText(txt); document.getElementById('copiar').textContent = 'Copiado ✓'; } catch { }
+  document.getElementById('resultado-texto').textContent = txt;
+});
+
+// ---------- Bucle
+const reloj = new THREE.Clock();
+const hud = document.getElementById('hud-tiempo');
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(reloj.getDelta(), 0.05);
+  avion.userData.actualizar(dt);
+  ambiente.actualizar(dt);
+  marcaValvula.userData.actualizar(dt); marcaPuesto.userData.actualizar(dt);
+  if ((caminata.fase === 'valvula' || caminata.fase === 'puesto') && !pausa) {
+    caminar(dt);
+    const pos = camara.getWorldPosition(new THREE.Vector3()); pos.y = 0;
+    for (const s of caminata.avanzar(dt, pos)) {
+      if (s.tipo === 'rojo') { audio.mal(); panelAvisoCaminata(TXT_CAMINATA.rojo, true); }
+      if (s.tipo === 'naranja') { audio.mal(); panelAvisoCaminata(TXT_CAMINATA.naranja, true); }
+      if (s.tipo === 'amarillo') { audio.aviso(); panelAvisoCaminata(TXT_CAMINATA.amarillo, false); }
+      if (s.tipo === 'valvula') { audio.ok(); panelValvula(); }
+      if (s.tipo === 'puesto') { audio.ok(); panelFinCaminata(); }
+    }
+  }
+  if (llegada.fase === 'manejo' && !pausa) {
+    const { acel, dir } = entrada.leer(renderer.xr.isPresenting ? controles : []);
+    manejo.acelerador = acel; manejo.direccion = dir; manejo.actualizar(dt);
+    if (conjunto.userData.volante) conjunto.userData.volante.rotation.z = -manejo.giro * 2.5;
+    for (const s of llegada.avanzar(dt, manejo.estado())) {
+      if (s.tipo === 'rojo') { audio.mal(); panelAvisoLlegada(TXT_LLEGADA.rojo); }
+      if (s.tipo === 'frente') { audio.mal(); panelAvisoLlegada(TXT_LLEGADA.frente); }
+      if (s.tipo === 'llegada') { audio.ok(); panelFinLlegada(); }
+    }
+  }
+  for (const a of Object.values(actores)) a.actualizar(dt);
+  if (!pausa && mision.fase === 'carga') {
+    for (const s of mision.avanzar(dt)) {
+      if (s.tipo === 'aparece') actores[s.id].aparecer();
+      if (s.tipo === 'vencido') { actores[s.id].retirar(); audio.mal(); panelExplicacion(EVENTOS.find(e => e.id === s.id), false); }
+    }
+    if (mision.fase === 'fin' && !panel.mesh.visible) panelFin();
+  }
+  const resueltos = EVENTOS.filter(e => ['resuelto', 'vencido'].includes(mision.registro[e.id].estado)).length;
+  const t = Math.floor(mision.t), mm = String(Math.floor(t / 60)).padStart(2, '0'), ss = String(t % 60).padStart(2, '0');
+  hud.textContent = (caminata.fase === 'valvula' || caminata.fase === 'puesto') ? `A pie · zona ${caminata.zona} · ${Math.floor(caminata.t)} s` : llegada.fase === 'manejo' ? `Llegada · ${Math.round(Math.abs(manejo.vel) * 3.6)} km/h · ${Math.floor(llegada.t)} s` : `Carga ${mm}:${ss} · Situaciones ${resueltos}/${EVENTOS.length}`;
+  if (renderer.xr.isPresenting) {
+    if (llegada.fase !== 'manejo') giroConPalanca();
+    // en VR el giro se hace con la palanca derecha; al caminar, la cabeza define la dirección
+    if (panel.mesh.visible) { let algo = false; for (const c of controles) { const { o, d } = rayoDe(c); algo = probar(o, d, false) || algo; } if (!algo) panel.setHover(-1); }
+  } else if (panel.mesh.visible && !arrastre) { ray.setFromCamera(puntero, camara); probar(ray.ray.origin.clone(), ray.ray.direction.clone(), false); }
+  renderer.render(escena, camara);
+});
+addEventListener('resize', () => { camara.aspect = innerWidth / innerHeight; camara.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+panelIntro();
+window.__juego = { mision, actores, panel, camara, empezar, probar, EVENTOS, llegada, manejo, entrada, empezarLlegada, conjunto, rig, caminata, empezarCaminata, posAcople,
+  mirar(p) { const c = camara.getWorldPosition(new THREE.Vector3()); yaw = Math.atan2(-(p.x - c.x), -(p.z - c.z)); pitch = Math.atan2(p.y - c.y, Math.hypot(p.x - c.x, p.z - c.z)); aplicarMirada(); camara.updateMatrixWorld(); } };
