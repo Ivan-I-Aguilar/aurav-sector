@@ -1,6 +1,7 @@
 // Escenario: pista de tierra en el campo, cielo, arboleda, humo de incendio a lo lejos,
 // y el diagrama de ángulos de aproximación del MOE 3.4 dibujado en el suelo.
 import * as THREE from './three.module.js';
+import { GLTFLoader } from './GLTFLoader.js?v=20260928b';
 
 const mat = (c, e = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, ...e });
 
@@ -198,6 +199,8 @@ export function crearEquipoCarga(desde, hasta) {
   const bomba = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.2, 14), mat(0x777c80, { metalness: 0.6, roughness: 0.4 })); bomba.rotation.z = Math.PI / 2; bomba.position.set(0.22, 0.22, 0); mb.add(bomba);
   const marco = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.02, 6, 16, Math.PI), mat(0x2a2a2a)); marco.position.set(0, 0.08, 0); marco.rotation.y = Math.PI / 2; mb.add(marco);
   mb.position.copy(desde); g.add(mb);
+  // Motobomba de Tripo (texto a 3D, 28/9): reemplaza a la de cajas cuando carga; la boca de la bomba mira a +x.
+  new GLTFLoader().load('./motobomba.glb', gltf => { const m = gltf.scene; m.position.copy(desde); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); m.name = 'motobomba-glb'; g.add(m); mb.visible = false; }, undefined, e => console.warn('motobomba.glb no cargó', e));
   // manguera de aspiración (tanque → bomba) y de impulsión (bomba → acople)
   const mManguera = mat(0x1d3d6b, { roughness: 0.7 });
   const tubo = (pts, r) => { const c = new THREE.CatmullRomCurve3(pts); const m = new THREE.Mesh(new THREE.TubeGeometry(c, 40, r, 8), mManguera); m.castShadow = true; g.add(m); return m; };
