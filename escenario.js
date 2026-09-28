@@ -163,7 +163,7 @@ export function crearEquipoCarga(desde, hasta) {
   tubo([new THREE.Vector3(desde.x - 1.7, 0.5, desde.z + 0.4), new THREE.Vector3(desde.x - 0.8, 0.08, desde.z + 0.2), new THREE.Vector3(desde.x + 0.35, 0.22, desde.z)], 0.045);
   const medio = new THREE.Vector3().lerpVectors(desde, hasta, 0.5);
   tubo([new THREE.Vector3(desde.x + 0.35, 0.22, desde.z), new THREE.Vector3(desde.x + 1.2, 0.06, desde.z - 0.3), new THREE.Vector3(medio.x, 0.06, medio.z + 0.4),
-    new THREE.Vector3(hasta.x - 0.2, 0.08, hasta.z + 0.5), new THREE.Vector3(hasta.x, hasta.y - 0.25, hasta.z + 0.25), hasta.clone()], 0.04);
+    new THREE.Vector3(hasta.x - 0.2, 0.08, hasta.z + 0.5), new THREE.Vector3(hasta.x, hasta.y - 0.25, hasta.z + 0.25), hasta.clone()], 0.04).name = 'manguera-impulsion';
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }

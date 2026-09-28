@@ -1,17 +1,19 @@
 // AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
-import { crearAT802 } from './at802.js?v=20260928b';
-import { crearAT802GLB } from './at802glb.js?v=20260928b';
-import { crearConjunto } from './vehiculos.js?v=20260928b';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260928b';
-import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260928b';
-import { crearAudio } from './audio.js?v=20260928b';
-import { Panel } from './panel.js?v=20260928b';
-import { Mision, EVENTOS } from './mision.js?v=20260928b';
-import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260928b';
-import { Manejo, Entrada } from './manejo.js?v=20260928b';
-import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260928b';
+import { crearAT802 } from './at802.js?v=20260928c';
+import { crearAT802GLB } from './at802glb.js?v=20260928c';
+import { crearConjunto } from './vehiculos.js?v=20260928c';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260928c';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260928c';
+import { crearAudio } from './audio.js?v=20260928c';
+import { Panel } from './panel.js?v=20260928c';
+import { Mision, EVENTOS } from './mision.js?v=20260928c';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260928c';
+import { Manejo, Entrada } from './manejo.js?v=20260928c';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260928c';
+import { Despegue } from './despegue.js?v=20260928c';
+import { Constancia } from './constancia.js?v=20260928c';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -177,6 +179,17 @@ const equipo = crearEquipoCarga(POS_BOMBA, posAcople); escena.add(equipo);
 // ---------- Audio
 const audio = crearAudio(camara);
 const sonidoTurbina = audio.posicional(avion.getObjectByName('helice'), audio.buffers.turbina, { loop: true, volumen: 1.1, ref: 7 });
+// ---------- Cierre: despegue de celebración y constancia
+const despegue = new Despegue(avion, piloto, { sonidoTurbina, manguera: equipo.getObjectByName('manguera-impulsion') });
+const constancia = new Constancia(); escena.add(constancia.mesh);
+let celebrando = false;
+function datosConstancia() {
+  const etapas = [];
+  if (llegada.fin) etapas.push({ nombre: 'Etapa 1 · Llegada con la camioneta (MOE 3.1.5)', nota: llegada.fin.nota });
+  if (caminata.fin) etapas.push({ nombre: 'Etapa 2 · Aproximación a pie por zonas (MOE 3.4)', nota: caminata.fin.nota });
+  if (mision.fin) etapas.push({ nombre: 'Etapa 3 · Control del sector durante la carga', nota: mision.fin.nota });
+  return { nombre: document.getElementById('alumno').value, etapas, fecha: new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }) };
+}
 
 // ---------- Actores de cada situación
 const mision = new Mision();
@@ -349,26 +362,46 @@ function panelExplicacion(e, bien) {
   accionPanel = () => { panel.ocultar(); pausa = false; if (mision.fase === 'fin') panelFin(); };
 }
 function panelFin() {
-  pausa = true; sonidoTurbina.isPlaying && sonidoTurbina.stop();
-  avion.userData.ponerMotor(false);
-  const f = mision.fin;
-  const lineas = f.detalle.map((d, i) => `${i + 1}. ${d.titulo}: ${d.texto}`);
+  // 1) tablero corto; 2) despegue de celebración; 3) nota; 4) constancia
+  pausa = true;
+  avion.userData.ponerMotor(true);
   panel.mostrar({
-    eyebrow: 'Carga terminada', titulo: `Nota ${f.nota}/100`,
-    texto: [`Detectaste ${f.detectados} de ${f.total} situaciones · ${f.sinErrores} sin errores.`, ...lineas],
-    botones: [{ texto: 'Volver a empezar', id: 'reiniciar' }], altoBoton: 80,
+    eyebrow: 'Carga terminada', titulo: 'Sector controlado. El avión sale a la misión.',
+    texto: ['El piloto te saluda: carga completa. Retirá la manguera y mirá cómo rueda hacia la pista y despega.'],
+    botones: [{ texto: 'Ver el despegue', id: 'despegue' }], altoBoton: 80,
   });
+  colocarPanel(panel, 1.45, 0.02);
+  accionPanel = () => { panel.ocultar(); celebrando = true; despegue.empezar(); };
+}
+function panelNota() {
+  pausa = true; celebrando = false;
+  const f = mision.fin;
+  const lineas = f.detalle.filter(d => !d.ok).map(d => `· ${d.titulo}: ${d.texto}`).slice(0, 4);
   if (caminata.fin) lineas.unshift(`Etapa 2 (a pie): nota ${caminata.fin.nota}/100`);
   if (llegada.fin) lineas.unshift(`Etapa 1 (llegada): nota ${llegada.fin.nota}/100`);
+  panel.mostrar({
+    eyebrow: 'Misión cumplida', titulo: `Nota ${f.nota}/100`,
+    texto: [`Detectaste ${f.detectados} de ${f.total} situaciones · ${f.sinErrores} sin errores.`, ...lineas],
+    botones: [{ texto: 'Ver mi constancia', id: 'constancia' }, { texto: 'Volver a empezar', id: 'reiniciar', estilo: 'secundario' }], altoBoton: 76,
+  });
   colocarPanel(panel, 1.45, 0.02);
-  accionPanel = () => reiniciar();
+  accionPanel = id => { if (id === 'constancia') panelConstancia(); else reiniciar(); };
   document.body.classList.add('fin');
   document.getElementById('resultado-texto').textContent = textoResultadoCompleto('');
+}
+function panelConstancia() {
+  constancia.mostrar(datosConstancia());
+  colocarPanel(constancia, 1.5, -0.05);
+  panel.mostrar({ eyebrow: 'Constancia', titulo: 'Tu constancia de participación', texto: ['En PC o celular podés descargarla como imagen con el botón de abajo a la derecha.'],
+    botones: [{ texto: 'Volver a empezar', id: 'reiniciar' }], altoBoton: 76 });
+  panel.mesh.scale.set(0.62, 0.62, 1);
+  colocarPanel(panel, 1.3, 0.62);
+  accionPanel = () => { panel.mesh.scale.set(1, 1, 1); constancia.ocultar(); reiniciar(); };
 }
 function reiniciar() {
   for (const a of Object.values(actores)) { a.retirar(); if (a.obj.isGroup && a.fase !== undefined) { a.obj.visible = false; a.fase = 'oculto'; } }
   actores.piloto.retirar();
-  mision.reset(); avion.userData.ponerMotor(true);
+  mision.reset(); despegue.reset(); constancia.ocultar(); celebrando = false; panel.mesh.scale.set(1, 1, 1); avion.userData.ponerMotor(true);
   caminata.reset(); marcaValvula.visible = marcaPuesto.visible = false; marcaTeleport.visible = false; if (renderer.xr.isPresenting) modoVR = null;
   llegada.reset(); manejo.activo = false; manejo.colocar(ESTACIONAMIENTO.pos.x, ESTACIONAMIENTO.pos.z, ESTACIONAMIENTO.rumbo); conjunto.userData.cisterna.rotation.y = 0.12;
   if (rig.parent !== escena) bajarDeLaCamioneta();
@@ -467,6 +500,7 @@ document.getElementById('empezar-pc').addEventListener('click', () => { if (misi
   }
 }
 document.getElementById('salir').addEventListener('click', () => reiniciar());
+document.getElementById('descargar').addEventListener('click', () => { constancia.dibujar(datosConstancia()); constancia.descargar(); });
 document.getElementById('copiar').addEventListener('click', async () => {
   const txt = textoResultadoCompleto(document.getElementById('alumno').value.trim());
   try { await navigator.clipboard.writeText(txt); document.getElementById('copiar').textContent = 'Copiado ✓'; } catch { }
@@ -480,6 +514,16 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(reloj.getDelta(), 0.05);
   avion.userData.actualizar(dt);
   ambiente.actualizar(dt);
+  let textoDespegue = null;
+  if (celebrando) {
+    textoDespegue = despegue.actualizar(dt);
+    if (!renderer.xr.isPresenting && !arrastre) { // en PC/celular la cámara sigue al avión
+      const p = avion.getWorldPosition(new THREE.Vector3()), c = camara.getWorldPosition(new THREE.Vector3());
+      const yawO = Math.atan2(-(p.x - c.x), -(p.z - c.z)), pitchO = Math.atan2(p.y + 1 - c.y, Math.hypot(p.x - c.x, p.z - c.z));
+      let dy = yawO - yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); yaw += dy * Math.min(1, dt * 2.5); pitch += (pitchO - pitch) * Math.min(1, dt * 2.5); aplicarMirada();
+    }
+    if (despegue.terminado) panelNota();
+  }
   marcaValvula.userData.actualizar(dt); marcaPuesto.userData.actualizar(dt);
   if ((caminata.fase === 'valvula' || caminata.fase === 'puesto') && !pausa) {
     caminar(dt);
@@ -512,7 +556,7 @@ renderer.setAnimationLoop(() => {
   }
   const resueltos = EVENTOS.filter(e => ['resuelto', 'vencido'].includes(mision.registro[e.id].estado)).length;
   const t = Math.floor(mision.t), mm = String(Math.floor(t / 60)).padStart(2, '0'), ss = String(t % 60).padStart(2, '0');
-  hud.textContent = (caminata.fase === 'valvula' || caminata.fase === 'puesto') ? `A pie · zona ${caminata.zona} · ${Math.floor(caminata.t)} s` : llegada.fase === 'manejo' ? `Llegada · ${Math.round(Math.abs(manejo.vel) * 3.6)} km/h · ${Math.floor(llegada.t)} s` : `Carga ${mm}:${ss} · Situaciones ${resueltos}/${EVENTOS.length}`;
+  hud.textContent = textoDespegue ? `Despegue · ${textoDespegue}` : (caminata.fase === 'valvula' || caminata.fase === 'puesto') ? `A pie · zona ${caminata.zona} · ${Math.floor(caminata.t)} s` : llegada.fase === 'manejo' ? `Llegada · ${Math.round(Math.abs(manejo.vel) * 3.6)} km/h · ${Math.floor(llegada.t)} s` : `Carga ${mm}:${ss} · Situaciones ${resueltos}/${EVENTOS.length}`;
   if (renderer.xr.isPresenting) {
     if (llegada.fase !== 'manejo') { if (modoVR === 'suave') giroSuave(dt); else giroConPalanca(); }
     apuntarPiso();
@@ -524,5 +568,5 @@ renderer.setAnimationLoop(() => {
 addEventListener('resize', () => { camara.aspect = innerWidth / innerHeight; camara.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 panelIntro();
-window.__juego = { mision, actores, panel, camara, empezar, probar, EVENTOS, llegada, manejo, entrada, empezarLlegada, conjunto, rig, caminata, empezarCaminata, posAcople,
+window.__juego = { mision, actores, panel, camara, empezar, probar, EVENTOS, llegada, manejo, entrada, empezarLlegada, conjunto, rig, caminata, empezarCaminata, posAcople, despegue, constancia, panelFin, panelNota, panelConstancia, avion, accion: id => accionPanel && accionPanel(id),
   mirar(p) { const c = camara.getWorldPosition(new THREE.Vector3()); yaw = Math.atan2(-(p.x - c.x), -(p.z - c.z)); pitch = Math.atan2(p.y - c.y, Math.hypot(p.x - c.x, p.z - c.z)); aplicarMirada(); camara.updateMatrixWorld(); } };

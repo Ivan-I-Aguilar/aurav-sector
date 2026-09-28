@@ -26,7 +26,7 @@
   body.fin #ayuda { display: none; }
   #final input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #b8c7d3; border-radius: 8px; margin: 8px 0; font: inherit; }
   #final pre { max-height: 140px; overflow: auto; font-size: 11px; background: #f2f6f9; padding: 8px; border-radius: 8px; white-space: pre-wrap; }
-  #copiar { background: var(--tinta); color: #fff; width: 100%; }
+  #copiar, #descargar { background: var(--tinta); color: #fff; width: 100%; margin-bottom: 6px; }
   #empezar-pc { display: none; }
   #mandos { display: none; position: fixed; left: 0; right: 0; bottom: 48px; padding: 0 16px; justify-content: space-between; pointer-events: none; }
   body.manejando #mandos { display: flex; }
@@ -53,10 +53,11 @@
 <div id="final">
   <b>Resultado</b>
   <input id="alumno" placeholder="Nombre del alumno">
+  <button id="descargar">Descargar constancia (PNG)</button>
   <button id="copiar">Copiar resultado</button>
   <pre id="resultado-texto"></pre>
 </div>
 <button id="empezar-pc"></button>
-<script type="module" src="./main.js?v=20260928b"></script>
+<script type="module" src="./main.js?v=20260928c"></script>
 </body>
 </html>
