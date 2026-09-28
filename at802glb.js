@@ -4,7 +4,7 @@
 // Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar, y los anclajes
 // 'acople-carga', 'acople-carga-derecho', 'cabina-piloto' y 'helice'.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260928d';
+import { GLTFLoader } from './GLTFLoader.js?v=20260928e';
 
 // Anclajes en coordenadas del avión (metros). Válvulas: bajo la panza detrás de la tolva (fotos AAXOD 24/9).
 const ANCLAJES = {
