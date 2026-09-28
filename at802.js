@@ -43,6 +43,10 @@ export function crearAT802() {
         if(lateral&&x<3.7)blend([111,19,43],Math.max(band(center+.115*k,center+.145*k),band(center-.06*k,center+.08*k),band(center-.165*k,center-.09*k)));
         // Panel de persianas verticales detrás de la cabina (fotos AAXOD): relieve claro/oscuro sobre la pintura.
         if(lateral&&x>-3.6&&x<-2.85&&y>center-.24&&y<center+.19){const f=((x+3.6)/.03)%1;const sh=f<.35?.22:f<.5?-.12:0;color=color.map(v=>Math.round(THREE.MathUtils.clamp(v*(1-sh),0,255)));}
+        // Desgaste (fotos AAXOD: avión limpio, apenas manchas de escape y polvo bajo la panza)
+        if(lateral&&x<2.55&&x>-0.9&&Math.abs(y-.36)<.16){const g=(1-(2.55-x)/3.45)*(1-Math.abs(y-.36)/.16)*.16;color=color.map(v=>Math.round(v*(1-g)));}
+        const bellyT=THREE.MathUtils.clamp((cy-y)/(cy-bottom+1e-6),0,1);if(bellyT>.55){const g=(bellyT-.55)/.45*.06;color=color.map(v=>Math.round(v*(1-g)));}
+        const gr=(Math.sin(px*12.9898+py*78.233)*43758.5453)%1;const grain=(gr-.5)*4;color=color.map(v=>Math.round(THREE.MathUtils.clamp(v+grain,0,255)));
         const n=(py*w+px)*4;paint.data[n]=color[0];paint.data[n+1]=color[1];paint.data[n+2]=color[2];paint.data[n+3]=255;
       }
     }
@@ -57,6 +61,29 @@ export function crearAT802() {
     for(const y of [62,194,318,450]){c.fillStyle='#737373';c.fillRect(0,y,w,1);for(let x=8;x<w;x+=13){c.fillStyle='#aeaeae';c.fillRect(x,y+3,1.3,1.3);}}
   });bump.map.colorSpace=THREE.NoColorSpace;
   const paintMap=hullPaint.map;hullPaint.dispose();hullPaint=new THREE.MeshPhysicalMaterial({map:paintMap,bumpMap:bump.map,bumpScale:.005,roughness:.32,clearcoat:.42,clearcoatRoughness:.24});hullPaint.map.anisotropy=8;hullPaint.bumpMap.anisotropy=4;bump.map=null;bump.dispose();
+  // Pintura de alas y cola: costillas con remaches, línea de flap/alerón, grano y algo de polvo en el intradós.
+  // UV de smoothLoft (eje z): u = envergadura, v = perímetro del perfil (0 borde de ataque, .5 borde de fuga, >.5 intradós).
+  let wingPaint=canvasMaterial(2048,512,(c,w,h)=>{
+    const img=c.createImageData(w,h);
+    for(let px=0;px<w;px++)for(let py=0;py<h;py++){
+      const v=1-(py+.5)/h,lower=v>.5;let col=lower?[229,231,227]:[239,241,237];
+      if(lower){const gr=.05*(1-Math.abs(v-.62)/.12);if(gr>0)col=col.map(q=>q*(1-gr));}
+      const g=((Math.sin(px*12.9898+py*78.233)*43758.5453)%1-.5)*4;col=col.map(q=>Math.round(THREE.MathUtils.clamp(q+g,0,255)));
+      const n=(py*w+px)*4;img.data[n]=col[0];img.data[n+1]=col[1];img.data[n+2]=col[2];img.data[n+3]=255;
+    }
+    c.putImageData(img,0,0);
+    // costillas cada ~0,75 m (u en 7,94 m) y filas de remaches
+    c.strokeStyle='#98a0a2';c.lineWidth=1.3;
+    for(let u=.045;u<1;u+=.0945){const x=u*w;c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();for(let y=4;y<h;y+=11){c.fillStyle='#7d868a';c.fillRect(x+3,y,2,2);}}
+    // largueros y línea de bisagra flap/alerón (extradós v≈.40, intradós v≈.60) y larguero principal (v≈.15/.85)
+    for(const v of [.40,.60,.15,.85]){const y=(1-v)*h;c.strokeStyle=v===.40||v===.60?'#8e9698':'#c0c6c7';c.lineWidth=v===.40||v===.60?1.4:.8;c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();for(let x=6;x<w;x+=12){c.fillStyle='#7d868a';c.fillRect(x,y+3,2,2);}}
+  });
+  const wingBump=canvasMaterial(2048,512,(c,w,h)=>{
+    c.fillStyle='#808080';c.fillRect(0,0,w,h);
+    for(let u=.045;u<1;u+=.0945){const x=u*w;c.fillStyle='#6a6a6a';c.fillRect(x,0,1,h);for(let y=4;y<h;y+=11){c.fillStyle='#b8b8b8';c.beginPath();c.arc(x+4,y+1,1.3,0,Math.PI*2);c.fill();}}
+    for(const v of [.40,.60]){const y=(1-v)*h;c.fillStyle='#606060';c.fillRect(0,y,w,2);}
+  });wingBump.map.colorSpace=THREE.NoColorSpace;
+  {const m=wingPaint.map;wingPaint.dispose();wingPaint=new THREE.MeshPhysicalMaterial({map:m,bumpMap:wingBump.map,bumpScale:.004,roughness:.34,clearcoat:.4,clearcoatRoughness:.26});wingPaint.map.anisotropy=8;wingBump.map=null;wingBump.dispose();}
   // 24 puntos por sección, hombros redondeados y laterales de la tolva robustos.
   const ring=([x,b,t,w])=>Array.from({length:24},(_,j)=>{const a=j*Math.PI/12,cs=Math.cos(a),sn=Math.sin(a);return[x,(t+b)/2+(t-b)/2*Math.sign(sn)*Math.abs(sn)**(x>-3.3?.48:.65),w*Math.sign(cs)*Math.abs(cs)**(x>-3.3?.48:.65)];});
   smoothLoft(body,stations.map(ring),hullPaint);
@@ -140,7 +167,7 @@ export function crearAT802() {
     return smoothLoft(body,[z0,z1].map(z=>profile.map(([u,h])=>[le-u*chord,base+Math.abs(z)*Math.tan(THREE.MathUtils.degToRad(3.5))+h*chord*thickness,z])),mat,'z');
   }
   for(const s of [-1,1]){
-    wing(s*.56,s*8.50,white);wing(s*8.50,s*9.03,red);
+    wing(s*.56,s*8.50,wingPaint);wing(s*8.50,s*9.03,red);
     // Juntas alerón/flap y bisagras bajo ala, sin superficies coplanares.
     const wy=z=>-.26+Math.abs(z)*Math.tan(THREE.MathUtils.degToRad(3.5));
     rod(body,[-.28,wy(s*.9)+.075,s*.9],[-.28,wy(s*8.45)+.075,s*8.45],.008,metal,6);
@@ -153,12 +180,12 @@ export function crearAT802() {
   for(const side of [-1,1]){
     const cuffs=[ [.59,.19], [.73,.12], [.90,.043], [1.12,0] ].map(([z,rise])=>profile.map(([u,h])=>[
       1.23-u*2.08,-.26+z*Math.tan(THREE.MathUtils.degToRad(3.5))+h*2.08+(h>0?rise*Math.sin(Math.PI*u)**.55+.002:-.002),side*z
-    ]));smoothLoft(body,cuffs,white,'z');
+    ]));smoothLoft(body,cuffs,wingPaint,'z');
   }
   // Estabilizador de aproximadamente 6 m: borde de ataque casi recto.
   for(const s of [-1,1]){
     const tailRing=(z)=>profile.map(([u,h])=>[-4.95-u*1.48,.24+h*1.48*.5,z]);
-    smoothLoft(body,[tailRing(s*.10),tailRing(s*2.60)],white,'z');smoothLoft(body,[tailRing(s*2.60),tailRing(s*3)],bordo,'z');
+    smoothLoft(body,[tailRing(s*.10),tailRing(s*2.60)],wingPaint,'z');smoothLoft(body,[tailRing(s*2.60),tailRing(s*3)],bordo,'z');
     for(const y of [.24+1.48*.5*.085+.004,.24-1.48*.5*.033-.004]){const f=box(body,[.03,.004,.62],[-5.69,y,s*2.80],white);f.rotation.y=s*.55;}
     rod(body,[-5.65,-.10,s*.15],[-5.55,.22,s*2.30],.035,white);
   }
