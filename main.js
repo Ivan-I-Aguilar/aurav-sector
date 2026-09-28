@@ -1,17 +1,17 @@
 // AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
-import { crearAT802 } from './at802.js';
-import { crearAT802GLB } from './at802glb.js';
-import { crearConjunto } from './vehiculos.js';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js';
-import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js';
-import { crearAudio } from './audio.js';
-import { Panel } from './panel.js';
-import { Mision, EVENTOS } from './mision.js';
-import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js';
-import { Manejo, Entrada } from './manejo.js';
-import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js';
+import { crearAT802 } from './at802.js?v=20260928b';
+import { crearAT802GLB } from './at802glb.js?v=20260928b';
+import { crearConjunto } from './vehiculos.js?v=20260928b';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260928b';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260928b';
+import { crearAudio } from './audio.js?v=20260928b';
+import { Panel } from './panel.js?v=20260928b';
+import { Mision, EVENTOS } from './mision.js?v=20260928b';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260928b';
+import { Manejo, Entrada } from './manejo.js?v=20260928b';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260928b';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
