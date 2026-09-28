@@ -6,7 +6,7 @@
 // En cada evento la opción correcta es SIEMPRE la primera (correct: 0); la interfaz rota el orden.
 export const EVENTOS = [
   {
-    id: 'brigadista', titulo: 'Brigadista hacia la hélice', cuando: 8,
+    id: 'brigadista', titulo: 'Brigadista hacia la hélice', cuando: 5,
     aviso: 'Alguien se acerca al avión por adelante.',
     pregunta: 'Un brigadista viene caminando hacia la nariz del avión para ofrecer ayuda. El motor está en marcha. ¿Qué hacés?',
     opciones: [
@@ -16,7 +16,7 @@ export const EVENTOS = [
     pista: 'MOE 3.4 y 2.x: el ET no permite que personal ajeno se acerque durante la carga. Adelante de la hélice es zona prohibida con motor encendido.',
   },
   {
-    id: 'celular', titulo: 'Te suena el celular', cuando: 26,
+    id: 'celular', titulo: 'Te suena el celular', cuando: 15,
     aviso: 'Te está sonando el celular.',
     pregunta: 'En plena carga te suena el celular. ¿Qué hacés?',
     opciones: [
@@ -26,7 +26,7 @@ export const EVENTOS = [
     pista: 'MOE 3.4: durante el reabastecimiento está totalmente prohibido usar el celular o cualquier elemento que distraiga.',
   },
   {
-    id: 'bolsa', titulo: 'Objeto suelto', cuando: 44,
+    id: 'bolsa', titulo: 'Objeto suelto', cuando: 25,
     aviso: 'Algo se mueve con el viento cerca del ala.',
     pregunta: 'Una bolsa de nailon se vuela cerca del ala, hacia adelante del avión. ¿Qué hacés?',
     opciones: [
@@ -36,7 +36,7 @@ export const EVENTOS = [
     pista: 'MOE 3.4: el ET verifica que ningún elemento se haya desplazado y pueda ser una amenaza. Mantener el sector limpio y ordenado.',
   },
   {
-    id: 'periodista', titulo: 'Periodista en el sector', cuando: 62,
+    id: 'periodista', titulo: 'Periodista en el sector', cuando: 36,
     aviso: 'Alguien con una cámara viene desde atrás tuyo.',
     pregunta: 'Un periodista entra al sector y te pide una nota sobre el incendio. ¿Qué hacés?',
     opciones: [
@@ -46,7 +46,7 @@ export const EVENTOS = [
     pista: 'MOE 4.3: el ET no brinda notas periodísticas. MOE 3.4: nadie ajeno a la operación se acerca durante la carga.',
   },
   {
-    id: 'piloto', titulo: 'Seña del piloto', cuando: 80,
+    id: 'piloto', titulo: 'Seña del piloto', cuando: 46,
     aviso: 'El piloto te está haciendo una seña.',
     pregunta: 'Desde la cabina, el piloto te hace una seña con la mano. ¿Qué hacés?',
     opciones: [
@@ -56,7 +56,7 @@ export const EVENTOS = [
     pista: 'MOE 3.4: el ET tiene que estar atento a cualquier directiva visual del piloto. Nunca acercarse por adelante: zona prohibida.',
   },
   {
-    id: 'curioso', titulo: 'Persona detrás de la cola', cuando: 98,
+    id: 'curioso', titulo: 'Persona detrás de la cola', cuando: 57,
     aviso: 'Alguien cruza por detrás del avión.',
     pregunta: 'Un vecino que miraba la operación camina por detrás de la cola, a pocos metros. ¿Qué hacés?',
     opciones: [
@@ -66,7 +66,7 @@ export const EVENTOS = [
     pista: 'MOE 3.4 (ángulos de aproximación): detrás del avión es zona de precaución por vientos fuertes, hasta unos 32 m. Y nadie ajeno a la operación en el sector.',
   },
   {
-    id: 'bombero', titulo: 'Bombero con ganas de ayudar', cuando: 116,
+    id: 'bombero', titulo: 'Bombero con ganas de ayudar', cuando: 67,
     aviso: 'Un bombero se mete debajo del ala.',
     pregunta: 'Un bombero quiere ayudarte con la manguera y se mete debajo del ala, hacia la raíz. ¿Qué hacés?',
     opciones: [
@@ -76,7 +76,7 @@ export const EVENTOS = [
     pista: 'MOE (responsabilidades del ET): coordina y controla al personal ajeno que asiste la carga. Muchos no están capacitados para trabajar cerca de una hélice en movimiento.',
   },
   {
-    id: 'radio', titulo: 'Llamado del Coordinador', cuando: 134,
+    id: 'radio', titulo: 'Llamado del Coordinador', cuando: 78,
     aviso: 'Te llaman por la radio.',
     pregunta: 'Te llama el Coordinador del incendio para preguntarte cuándo sale el avión. ¿Qué hacés?',
     opciones: [
@@ -87,7 +87,7 @@ export const EVENTOS = [
   },
 ];
 
-const T_LIMITE = 20;   // segundos para detectar un evento antes de que cuente como «no detectado»
+const T_LIMITE = 15;   // segundos para detectar un evento antes de que cuente como «no detectado»
 const T_RAPIDO = 8;    // detectado en menos de esto: reacción a tiempo
 
 export class Mision {

@@ -2,9 +2,10 @@
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
 import { crearAT802 } from './at802.js';
+import { crearAT802GLB } from './at802glb.js';
 import { crearConjunto } from './vehiculos.js';
 import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js';
-import { crearPersona, crearPiloto, caminarHacia } from './personajes.js';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js';
 import { crearAudio } from './audio.js';
 import { Panel } from './panel.js';
 import { Mision, EVENTOS } from './mision.js';
@@ -49,16 +50,26 @@ const zonas = crearZonas(11); zonas.position.x = 0.4; escena.add(zonas);
 // Lado por el que se carga: en AAXOD se carga por cualquiera de las dos válvulas según dónde quede el avión
 // en la plataforma. El jugador y la motobomba están del lado +z, que en este modelo es el lado DERECHO del avión.
 const LADO_CARGA = 'derecho'; // 'izquierdo' | 'derecho'
-const avion = crearAT802(); escena.add(avion);
+// Avión: modelo Tripo (at802.glb) con las fotos de AAXOD; si no carga, el procedural de at802.js.
+// USAR_AVION_TRIPO: false = avión de código (at802.js, GPT rev.04 + fotos AAXOD); true = at802.glb de Tripo (a mejorar texturizando el modelo de código en Tripo).
+const USAR_AVION_TRIPO = false;
+let avion;
+if (USAR_AVION_TRIPO) { try { avion = await crearAT802GLB(); } catch (e) { console.warn('No se pudo cargar at802.glb, se usa el modelo procedural', e); avion = crearAT802(); } }
+else avion = crearAT802();
+escena.add(avion);
 avion.userData.ponerMotor(true);
 avion.updateMatrixWorld(true);
 const asiento = avion.getObjectByName('cabina-piloto');
-const piloto = crearPiloto(); piloto.position.set(0, -0.05, 0); asiento.add(piloto);
+let piloto; try { piloto = crearPilotoGLB(await cargarGLB('./piloto.glb')); } catch (e) { console.warn('piloto.glb no cargó', e); piloto = crearPiloto(); }
+piloto.position.set(0, -0.05, 0); asiento.add(piloto);
+// personas escaneadas (Sketchfab, CC BY) para el vecino y el periodista; el resto, procedurales
+const MODELOS_PERSONA = {};
+for (const [tipo, url, op] of [['vecino', './vecino.glb', {}], ['periodista', './periodista.glb', { camara: true }]]) { try { MODELOS_PERSONA[tipo] = { gltf: await cargarGLB(url), op }; } catch (e) { console.warn(url, 'no cargó', e); } }
 const posAcople = avion.getObjectByName(LADO_CARGA === 'derecho' ? 'acople-carga-derecho' : 'acople-carga').getWorldPosition(new THREE.Vector3());
 
 const ESTACIONAMIENTO = { pos: V(-7.5, 0, 19.5), rumbo: 0.05 };     // A VALIDAR con AAXOD: lugar de la camioneta durante la carga
 const INICIO_LLEGADA = { pos: V(40, 0, 22), rumbo: Math.PI };         // llega desde adelante-derecha, con la nariz del avión a la vista
-const conjunto = crearConjunto({ anguloCisterna: 0.12 }); conjunto.position.copy(ESTACIONAMIENTO.pos); conjunto.rotation.y = ESTACIONAMIENTO.rumbo; escena.add(conjunto);
+const conjunto = await crearConjunto({ anguloCisterna: 0.12 }); conjunto.position.copy(ESTACIONAMIENTO.pos); conjunto.rotation.y = ESTACIONAMIENTO.rumbo; escena.add(conjunto);
 // rectángulo de estacionamiento pintado en el piso
 {
   const g = new THREE.Group(); const mLinea = new THREE.MeshBasicMaterial({ color: 0xf2c200 });
@@ -68,10 +79,42 @@ const conjunto = crearConjunto({ anguloCisterna: 0.12 }); conjunto.position.copy
 }
 const manejo = new Manejo(conjunto), entrada = new Entrada();
 const llegada = new Llegada({ pos: V(0.4, 0, 0), rumbo: 0 }, ESTACIONAMIENTO.pos);
-const ASIENTO_CHOFER = V(-0.35, -0.2, -0.42); // respecto del origen de la camioneta (piso); la cámara suma su propia altura
+const ASIENTO_CHOFER = conjunto.userData.asiento ? V(...conjunto.userData.asiento) : V(-0.35, -0.2, -0.42); // respecto del origen de la camioneta (piso); la cámara suma su propia altura
 // ---------- Etapa 2: aproximación a pie
 const caminata = new Caminata({ pos: V(0.4, 0, 0), rumbo: 0 }, posAcople.clone().setY(0), POS_JUGADOR);
 const VEL_CAMINAR = 1.6;
+// Movimiento en VR: 'suave' (palanca izquierda camina, derecha gira suave) o 'teleport' (apuntar al piso y gatillo; giro de a 45°).
+let modoVR = null;
+const marcaTeleport = (() => { const m = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.4, 32), new THREE.MeshBasicMaterial({ color: 0x29b6f6, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.y = 0.03; m.visible = false; escena.add(m); return m; })();
+let puntoTeleport = null;
+function caminataActiva() { return caminata.fase === 'valvula' || caminata.fase === 'puesto'; }
+function panelModoVR(despues) {
+  pausa = true;
+  panel.mostrar({ eyebrow: 'Meta Quest', titulo: '¿Cómo te querés mover?',
+    texto: ['Caminar con la palanca: la izquierda camina hacia donde mirás y la derecha gira suave.', 'Teletransporte: apuntá al piso con el control y apretá el gatillo para aparecer ahí; la palanca derecha gira de a 45°.', 'Se puede cambiar volviendo al inicio (✕).'],
+    botones: [{ texto: 'Caminar con la palanca', id: 'suave' }, { texto: 'Teletransporte', id: 'teleport' }], altoBoton: 80 });
+  colocarPanel(panel);
+  accionPanel = id => { modoVR = id; panel.ocultar(); pausa = false; despues && despues(); };
+}
+function teleportar(p) { const c = camara.getWorldPosition(new THREE.Vector3()); rig.position.x += p.x - c.x; rig.position.z += p.z - c.z; rig.position.y = 0; audio.aviso(); }
+function apuntarPiso() {
+  puntoTeleport = null; marcaTeleport.visible = false;
+  if (!renderer.xr.isPresenting || modoVR !== 'teleport' || !caminataActiva() || panel.mesh.visible) return;
+  for (const c of controles) {
+    if (!c.userData.fuente) continue;
+    const { o, d } = rayoDe(c); if (d.y >= -0.05) continue;
+    const t = -o.y / d.y, p = o.clone().addScaledVector(d, t);
+    if (t < 14) { puntoTeleport = p; marcaTeleport.position.set(p.x, 0.03, p.z); marcaTeleport.visible = true; return; }
+  }
+}
+function giroSuave(dt) {
+  for (const c of controles) {
+    const gp = c.userData.fuente?.gamepad; if (!gp || c.userData.fuente.handedness !== 'right') continue;
+    const x = gp.axes[2] ?? 0; if (Math.abs(x) < 0.2) continue;
+    const cabeza = camara.getWorldPosition(new THREE.Vector3()), ang = -x * dt * 1.6;
+    rig.position.sub(cabeza).applyAxisAngle(V(0, 1, 0), ang).add(cabeza); rig.rotation.y += ang;
+  }
+}
 function marcador(color) {
   const g = new THREE.Group(); g.visible = false;
   const anillo = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
@@ -119,6 +162,7 @@ function panelFinCaminata() {
   accionPanel = () => { document.body.classList.remove('manejando'); rig.position.copy(POS_JUGADOR); panel.ocultar(); document.getElementById('ayuda').textContent = 'Arrastrá para mirar alrededor · tocá o hacé clic sobre lo que veas'; empezar(); };
 }
 function caminar(dt) {
+  if (renderer.xr.isPresenting && modoVR === 'teleport') return;
   const { adelante, lateral, giro } = entrada.leerCaminar(renderer.xr.isPresenting ? controles : []);
   if (giro) { yaw += giro * dt * 1.6; aplicarMirada(); }
   if (!adelante && !lateral) return;
@@ -142,7 +186,7 @@ function proxy(radio, padre, pos = V(0, 0, 0)) {
   m.position.copy(pos); padre.add(m); return m;
 }
 function persona(tipo, inicio, destino, salida, vel = 1.25) {
-  const p = crearPersona(tipo); p.position.copy(inicio); p.visible = false; escena.add(p);
+  const p = MODELOS_PERSONA[tipo] ? crearPersonaGLB(MODELOS_PERSONA[tipo].gltf, MODELOS_PERSONA[tipo].op) : crearPersona(tipo); p.position.copy(inicio); p.visible = false; escena.add(p);
   const hit = proxy(0.75, p, V(0, 1.0, 0));
   return { obj: p, hit, inicio, destino, salida, vel, fase: 'oculto',
     aparecer() { p.position.copy(inicio); p.visible = true; this.fase = 'entra'; },
@@ -325,11 +369,11 @@ function reiniciar() {
   for (const a of Object.values(actores)) { a.retirar(); if (a.obj.isGroup && a.fase !== undefined) { a.obj.visible = false; a.fase = 'oculto'; } }
   actores.piloto.retirar();
   mision.reset(); avion.userData.ponerMotor(true);
-  caminata.reset(); marcaValvula.visible = marcaPuesto.visible = false;
+  caminata.reset(); marcaValvula.visible = marcaPuesto.visible = false; marcaTeleport.visible = false; if (renderer.xr.isPresenting) modoVR = null;
   llegada.reset(); manejo.activo = false; manejo.colocar(ESTACIONAMIENTO.pos.x, ESTACIONAMIENTO.pos.z, ESTACIONAMIENTO.rumbo); conjunto.userData.cisterna.rotation.y = 0.12;
   if (rig.parent !== escena) bajarDeLaCamioneta();
   document.body.classList.remove('fin', 'jugando', 'manejando');
-  panelIntro();
+  if (renderer.xr.isPresenting && !modoVR) panelModoVR(() => panelIntro()); else panelIntro();
 }
 
 // ---------- Selección: mouse / dedo / controles
@@ -378,7 +422,7 @@ const controles = [0, 1].map(i => {
   const linea = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0, 0, 0), V(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x29b6f6 }));
   linea.scale.z = 8; c.add(linea);
   const punta = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: 0x29b6f6 })); c.add(punta);
-  c.addEventListener('select', () => { const { o, d } = rayoDe(c); probar(o, d, true); });
+  c.addEventListener('select', () => { const { o, d } = rayoDe(c); if (!probar(o, d, true) && puntoTeleport && modoVR === 'teleport' && caminataActiva()) teleportar(puntoTeleport); });
   c.addEventListener('connected', ev => { c.userData.fuente = ev.data; });
   return c;
 });
@@ -410,7 +454,7 @@ botonVR.addEventListener('click', async () => {
   await renderer.xr.setSession(s);
   audio.reanudar();
   s.addEventListener('end', () => { camara.position.y = 1.65; aplicarMirada(); rig.rotation.y = 0; rig.position.copy(POS_JUGADOR); });
-  setTimeout(() => panel.mesh.visible && colocarPanel(panel), 400);
+  setTimeout(() => { if (!modoVR) { const anterior = panel.mesh.visible && panel.datos ? { ...panel.datos } : null, accionAnterior = accionPanel; panelModoVR(() => { if (mision.fase === 'intro' && llegada.fase === 'intro' && caminata.fase === 'intro') panelIntro(); else if (anterior) { panel.mostrar(anterior); colocarPanel(panel); pausa = true; accionPanel = accionAnterior; } }); } else if (panel.mesh.visible) colocarPanel(panel); }, 400);
 });
 document.getElementById('empezar-pc').addEventListener('click', () => { if (mision.fase === 'intro') empezar(); });
 { // mandos táctiles para celular
@@ -470,7 +514,8 @@ renderer.setAnimationLoop(() => {
   const t = Math.floor(mision.t), mm = String(Math.floor(t / 60)).padStart(2, '0'), ss = String(t % 60).padStart(2, '0');
   hud.textContent = (caminata.fase === 'valvula' || caminata.fase === 'puesto') ? `A pie · zona ${caminata.zona} · ${Math.floor(caminata.t)} s` : llegada.fase === 'manejo' ? `Llegada · ${Math.round(Math.abs(manejo.vel) * 3.6)} km/h · ${Math.floor(llegada.t)} s` : `Carga ${mm}:${ss} · Situaciones ${resueltos}/${EVENTOS.length}`;
   if (renderer.xr.isPresenting) {
-    if (llegada.fase !== 'manejo') giroConPalanca();
+    if (llegada.fase !== 'manejo') { if (modoVR === 'suave') giroSuave(dt); else giroConPalanca(); }
+    apuntarPiso();
     // en VR el giro se hace con la palanca derecha; al caminar, la cabeza define la dirección
     if (panel.mesh.visible) { let algo = false; for (const c of controles) { const { o, d } = rayoDe(c); algo = probar(o, d, false) || algo; } if (!algo) panel.setHover(-1); }
   } else if (panel.mesh.visible && !arrastre) { ray.setFromCamera(puntero, camara); probar(ray.ray.origin.clone(), ray.ray.direction.clone(), false); }

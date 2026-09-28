@@ -111,3 +111,43 @@ export function crearPiloto() {
   };
   return g;
 }
+
+// ---------- Modelos GLB de terceros (Sketchfab, CC BY 4.0; ver README) con la misma API que los procedurales
+import { GLTFLoader } from './GLTFLoader.js';
+export async function cargarGLB(url) { return new GLTFLoader().loadAsync(url); }
+
+// Escaneo estático de una persona (pose de caminata): se desliza y cabecea un poco al caminar.
+export function crearPersonaGLB(gltf, { camara = false } = {}) {
+  const p = new THREE.Group(); p.name = 'persona-glb';
+  const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = true; } }); p.add(m);
+  if (camara) {
+    const cam = new THREE.Group();
+    cam.add(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.13), mat(0x111111)));
+    const obj = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.17, 10), mat(0x222222)); obj.rotation.z = Math.PI / 2; obj.position.x = 0.19; cam.add(obj);
+    cam.position.set(0.28, 1.05, -0.22); p.add(cam);
+  }
+  const estado = { fase: 0, caminando: false, saludo: false };
+  p.userData = { estado, brazos: [], piernas: [], actualizar(dt) { if (estado.caminando) { estado.fase += dt * 7; m.position.y = Math.abs(Math.sin(estado.fase)) * 0.025; m.rotation.y = Math.sin(estado.fase) * 0.04; } else { m.position.y = 0; m.rotation.y = 0; } } };
+  return p;
+}
+
+// Piloto animado (rig Mixamo): sentado en la cabina; con `seña` levanta el brazo derecho.
+export function crearPilotoGLB(gltf) {
+  const g = new THREE.Group(); g.name = 'piloto';
+  const m = gltf.scene; m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  m.scale.setScalar(0.8); m.position.set(0, -0.78, 0); g.add(m);       // origen del grupo = asiento; las piernas quedan dentro del fuselaje
+  const mixer = new THREE.AnimationMixer(m);
+  if (gltf.animations?.length) { const a = mixer.clipAction(gltf.animations[0]); a.play(); }
+  const brazo = m.getObjectByName('mixamorig:RightArm_00') || m.getObjectByName('mixamorigRightArm');
+  const antebrazo = m.getObjectByName('mixamorig:RightForeArm_021');
+  let fase = 0, k = 0;
+  g.userData = {
+    seña: false,
+    actualizar(dt) {
+      mixer.update(dt);
+      k += ((g.userData.seña ? 1 : 0) - k) * Math.min(1, dt * 4);
+      if (k > 0.01 && brazo) { fase += dt * 8; brazo.rotation.z += -k * (2.0 + Math.sin(fase) * 0.35); brazo.rotation.x += -k * 0.6; if (antebrazo) antebrazo.rotation.z += -k * 0.6; }
+    },
+  };
+  return g;
+}
