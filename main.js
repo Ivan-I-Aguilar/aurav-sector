@@ -1,19 +1,19 @@
 // AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
-import { crearAT802 } from './at802.js?v=20260928f';
-import { crearAT802GLB } from './at802glb.js?v=20260928f';
-import { crearConjunto } from './vehiculos.js?v=20260928f';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260928f';
-import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260928f';
-import { crearAudio } from './audio.js?v=20260928f';
-import { Panel } from './panel.js?v=20260928f';
-import { Mision, EVENTOS } from './mision.js?v=20260928f';
-import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260928f';
-import { Manejo, Entrada } from './manejo.js?v=20260928f';
-import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260928f';
-import { Despegue } from './despegue.js?v=20260928f';
-import { Constancia } from './constancia.js?v=20260928f';
+import { crearAT802 } from './at802.js?v=20260929a';
+import { crearAT802GLB } from './at802glb.js?v=20260929a';
+import { crearConjunto } from './vehiculos.js?v=20260929a';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260929a';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260929a';
+import { crearAudio } from './audio.js?v=20260929a';
+import { Panel } from './panel.js?v=20260929a';
+import { Mision, EVENTOS } from './mision.js?v=20260929a';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260929a';
+import { Manejo, Entrada } from './manejo.js?v=20260929a';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260929a';
+import { Despegue } from './despegue.js?v=20260929a';
+import { Constancia } from './constancia.js?v=20260929a';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -54,7 +54,7 @@ const zonas = crearZonas(11); zonas.position.x = 0.4; escena.add(zonas);
 const LADO_CARGA = 'derecho'; // 'izquierdo' | 'derecho'
 // Avión: modelo Tripo (at802.glb) con las fotos de AAXOD; si no carga, el procedural de at802.js.
 // USAR_AVION_TRIPO: false = avión de código (at802.js, GPT rev.04 + fotos AAXOD); true = at802.glb de Tripo (a mejorar texturizando el modelo de código en Tripo).
-const USAR_AVION_TRIPO = false;
+const USAR_AVION_TRIPO = true;
 let avion;
 if (USAR_AVION_TRIPO) { try { avion = await crearAT802GLB(); } catch (e) { console.warn('No se pudo cargar at802.glb, se usa el modelo procedural', e); avion = crearAT802(); } }
 else avion = crearAT802();
