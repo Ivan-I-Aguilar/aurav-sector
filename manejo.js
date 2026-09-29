@@ -54,6 +54,8 @@ export class Entrada {
     addEventListener('keyup', e => { this.teclas.delete(e.key.toLowerCase()); });
   }
   setTactil(acel, dir) { this.tactil.acel = acel; this.tactil.dir = dir; }
+  // Palancas del Quest: zona muerta de 0,25 reescalada y respuesta cuadrática (fino cerca del centro)
+  static palanca(v, zm = 0.25) { const a = Math.abs(v); if (a < zm) return 0; const r = (a - zm) / (1 - zm); return Math.sign(v) * r * r; }
   leer(controles) {
     let acel = 0, dir = 0;
     const t = this.teclas;
@@ -64,8 +66,9 @@ export class Entrada {
       const gp = c.userData.fuente?.gamepad; if (!gp) continue;
       const mano = c.userData.fuente?.handedness;
       const x = gp.axes[2] ?? 0, y = gp.axes[3] ?? 0;
-      if (mano === 'left') { if (Math.abs(y) > 0.15) acel += -y; if (Math.abs(x) > 0.15 && !controles.some(o => o.userData.fuente?.handedness === 'right')) dir += -x; }
-      else if (Math.abs(x) > 0.15) dir += -x;
+      const px = Entrada.palanca(x), py = Entrada.palanca(y);
+      if (mano === 'left') { acel += -py; if (!controles.some(o => o.userData.fuente?.handedness === 'right')) dir += -px; }
+      else dir += -px;
     }
     return { acel: THREE.MathUtils.clamp(acel, -1, 1), dir: THREE.MathUtils.clamp(dir, -1, 1) };
   }
@@ -80,7 +83,7 @@ export class Entrada {
     for (const c of controles || []) {
       const gp = c.userData.fuente?.gamepad; if (!gp || c.userData.fuente?.handedness !== 'left') continue;
       const x = gp.axes[2] ?? 0, y = gp.axes[3] ?? 0;
-      if (Math.abs(y) > 0.15) adelante += -y; if (Math.abs(x) > 0.15) lateral += -x;
+      adelante += -Entrada.palanca(y); lateral += -Entrada.palanca(x);
     }
     return { adelante: THREE.MathUtils.clamp(adelante, -1, 1), lateral: THREE.MathUtils.clamp(lateral, -1, 1), giro: THREE.MathUtils.clamp(giro, -1, 1) };
   }

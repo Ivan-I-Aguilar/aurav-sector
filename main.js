@@ -1,19 +1,19 @@
 // AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
-import { crearAT802 } from './at802.js?v=20260929a';
-import { crearAT802GLB } from './at802glb.js?v=20260929a';
-import { crearConjunto } from './vehiculos.js?v=20260929a';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260929a';
-import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260929a';
-import { crearAudio } from './audio.js?v=20260929a';
-import { Panel } from './panel.js?v=20260929a';
-import { Mision, EVENTOS } from './mision.js?v=20260929a';
-import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260929a';
-import { Manejo, Entrada } from './manejo.js?v=20260929a';
-import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260929a';
-import { Despegue } from './despegue.js?v=20260929a';
-import { Constancia } from './constancia.js?v=20260929a';
+import { crearAT802 } from './at802.js?v=20260929b';
+import { crearAT802GLB } from './at802glb.js?v=20260929b';
+import { crearConjunto } from './vehiculos.js?v=20260929b';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260929b';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260929b';
+import { crearAudio } from './audio.js?v=20260929b';
+import { Panel } from './panel.js?v=20260929b';
+import { Mision, EVENTOS } from './mision.js?v=20260929b';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260929b';
+import { Manejo, Entrada } from './manejo.js?v=20260929b';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260929b';
+import { Despegue } from './despegue.js?v=20260929b';
+import { Constancia } from './constancia.js?v=20260929b';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -64,6 +64,7 @@ avion.updateMatrixWorld(true);
 const asiento = avion.getObjectByName('cabina-piloto');
 let piloto; try { piloto = crearPilotoGLB(await cargarGLB('./piloto.glb')); } catch (e) { console.warn('piloto.glb no cargó', e); piloto = crearPiloto(); }
 piloto.position.set(0, -0.05, 0); asiento.add(piloto);
+piloto.visible = false;   // 29/9: en el visor se lo veía parado sobre el ala; se lo oculta (la situación «seña del piloto» sigue funcionando con el proxy)
 // personas escaneadas (Sketchfab, CC BY) para el vecino y el periodista; el resto, procedurales
 const MODELOS_PERSONA = {};
 for (const [tipo, url, op] of [['vecino', './vecino.glb', {}], ['periodista', './periodista.glb', { camara: true }]]) { try { MODELOS_PERSONA[tipo] = { gltf: await cargarGLB(url), op }; } catch (e) { console.warn(url, 'no cargó', e); } }
@@ -85,6 +86,7 @@ const ASIENTO_CHOFER = conjunto.userData.asiento ? V(...conjunto.userData.asient
 // ---------- Etapa 2: aproximación a pie
 const caminata = new Caminata({ pos: V(0.4, 0, 0), rumbo: 0 }, posAcople.clone().setY(0), POS_JUGADOR);
 const VEL_CAMINAR = 1.6;
+const velCaminar = new THREE.Vector2();
 // Movimiento en VR: 'suave' (palanca izquierda camina, derecha gira suave) o 'teleport' (apuntar al piso y gatillo; giro de a 45°).
 let modoVR = null;
 const marcaTeleport = (() => { const m = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.4, 32), new THREE.MeshBasicMaterial({ color: 0x29b6f6, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.y = 0.03; m.visible = false; escena.add(m); return m; })();
@@ -167,10 +169,13 @@ function caminar(dt) {
   if (renderer.xr.isPresenting && modoVR === 'teleport') return;
   const { adelante, lateral, giro } = entrada.leerCaminar(renderer.xr.isPresenting ? controles : []);
   if (giro) { yaw += giro * dt * 1.6; aplicarMirada(); }
-  if (!adelante && !lateral) return;
+  // velocidad suavizada (arranca y frena en ~0,3 s) para que la palanca del Quest no dé tirones
+  const k = Math.min(1, dt / 0.3);
+  velCaminar.x += (adelante - velCaminar.x) * k; velCaminar.y += (lateral - velCaminar.y) * k;
+  if (Math.abs(velCaminar.x) < 0.01 && Math.abs(velCaminar.y) < 0.01) { velCaminar.set(0, 0); return; }
   const dir = camara.getWorldDirection(new THREE.Vector3()); dir.y = 0; dir.normalize();
   const lado = V(dir.z, 0, -dir.x);
-  rig.position.addScaledVector(dir, adelante * VEL_CAMINAR * dt).addScaledVector(lado, -lateral * VEL_CAMINAR * dt);
+  rig.position.addScaledVector(dir, velCaminar.x * VEL_CAMINAR * dt).addScaledVector(lado, -velCaminar.y * VEL_CAMINAR * dt);
   rig.position.y = 0;
 }
 const POS_BOMBA = V(-4.4, 0, 12.2);
@@ -499,7 +504,35 @@ document.getElementById('empezar-pc').addEventListener('click', () => { if (misi
     b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
   }
 }
-document.getElementById('salir').addEventListener('click', () => reiniciar());
+document.getElementById('salir').addEventListener('click', () => panelPausa());
+// Menú de pausa: ✕ en pantalla, tecla Esc en PC, botón B o Y del control en el Quest
+let enPausaMenu = false;
+function panelPausa() {
+  if (enPausaMenu) return;
+  const enIntro = mision.fase === 'intro' && llegada.fase === 'intro' && caminata.fase === 'intro';
+  if (enIntro && !renderer.xr.isPresenting) return;
+  const anterior = panel.mesh.visible && panel.datos ? { ...panel.datos } : null, accionAnterior = accionPanel, pausaAnterior = pausa;
+  enPausaMenu = true; pausa = true;
+  const botones = [{ texto: 'Seguir', id: 'seguir' }];
+  if (!enIntro) botones.push({ texto: 'Volver al inicio', id: 'inicio' });
+  if (renderer.xr.isPresenting) botones.push({ texto: 'Salir de la realidad virtual', id: 'salirvr' });
+  panel.mostrar({ eyebrow: 'Pausa', titulo: 'Juego en pausa', texto: [enIntro ? 'Podés salir del visor y seguir en la pantalla de la PC.' : 'El reloj está detenido. ¿Qué querés hacer?'], botones, altoBoton: 74 });
+  colocarPanel(panel);
+  accionPanel = id => {
+    enPausaMenu = false;
+    if (id === 'seguir') { if (anterior) { panel.mostrar(anterior); colocarPanel(panel); pausa = pausaAnterior; accionPanel = accionAnterior; } else { panel.ocultar(); pausa = false; accionPanel = accionAnterior; } }
+    else if (id === 'inicio') { panel.mesh.scale.set(1, 1, 1); constancia.ocultar(); reiniciar(); }
+    else if (id === 'salirvr') { const ses = renderer.xr.getSession(); panel.mesh.scale.set(1, 1, 1); constancia.ocultar(); panel.ocultar(); if (ses) ses.end().then(() => reiniciar()); else reiniciar(); }
+  };
+}
+addEventListener('keydown', e => { if (e.key === 'Escape') panelPausa(); });
+let botonMenuListo = true;
+function botonMenuVR() {
+  let apretado = false;
+  for (const c of controles) { const gp = c.userData.fuente?.gamepad; if (gp && gp.buttons[5]?.pressed) apretado = true; }
+  if (apretado && botonMenuListo) { botonMenuListo = false; panelPausa(); }
+  if (!apretado) botonMenuListo = true;
+}
 document.getElementById('descargar').addEventListener('click', () => { constancia.dibujar(datosConstancia()); constancia.descargar(); });
 document.getElementById('copiar').addEventListener('click', async () => {
   const txt = textoResultadoCompleto(document.getElementById('alumno').value.trim());
@@ -558,6 +591,7 @@ renderer.setAnimationLoop(() => {
   const t = Math.floor(mision.t), mm = String(Math.floor(t / 60)).padStart(2, '0'), ss = String(t % 60).padStart(2, '0');
   hud.textContent = textoDespegue ? `Despegue · ${textoDespegue}` : (caminata.fase === 'valvula' || caminata.fase === 'puesto') ? `A pie · zona ${caminata.zona} · ${Math.floor(caminata.t)} s` : llegada.fase === 'manejo' ? `Llegada · ${Math.round(Math.abs(manejo.vel) * 3.6)} km/h · ${Math.floor(llegada.t)} s` : `Carga ${mm}:${ss} · Situaciones ${resueltos}/${EVENTOS.length}`;
   if (renderer.xr.isPresenting) {
+    botonMenuVR();
     if (llegada.fase !== 'manejo') { if (modoVR === 'suave') giroSuave(dt); else giroConPalanca(); }
     apuntarPiso();
     // en VR el giro se hace con la palanca derecha; al caminar, la cabeza define la dirección

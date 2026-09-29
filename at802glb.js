@@ -4,7 +4,7 @@
 // Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar, y los anclajes
 // 'acople-carga', 'acople-carga-derecho', 'cabina-piloto' y 'helice'.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260929a';
+import { GLTFLoader } from './GLTFLoader.js?v=20260929b';
 
 // Anclajes en coordenadas del avión (metros). Válvulas: bajo la panza detrás de la tolva (fotos AAXOD 24/9).
 // Modelo actual (29/9): AT-802 generado en Tripo a partir de la maqueta de madera de AAXOD, repintado con el
@@ -14,13 +14,12 @@ const ANCLAJES = {
   'acople-carga-derecho': [-1.6, 0.74, 1.0],
   'cabina-piloto': [-1.7, 1.78, 0],
 };
-const HELICE = { pos: [3.22, 2.16, 0], cabeceo: 0.10 };   // hub de la hélice y elevación del eje del motor
+const HELICE = { pos: [2.78, 2.16, 0], cabeceo: 0.10 };   // raíz de las palas (dentro del cono de la maqueta, que va de x 2,5 a 3,19) y elevación del eje
 
-// Hélice de código (la maqueta la tenía rota): spinner + 5 palas negras con puntas blancas.
+// Hélice de código (la maqueta la tenía rota): 5 palas negras con puntas blancas. El cono (spinner) es el de la maqueta.
 function crearHelice() {
   const g = new THREE.Group(); g.name = 'helice';
-  const negro = new THREE.MeshStandardMaterial({ color: 0x181b1d, roughness: 0.7 }), cromo = new THREE.MeshStandardMaterial({ color: 0xe0e5ec, metalness: 1, roughness: 0.15 }), blanco = new THREE.MeshStandardMaterial({ color: 0xf0f0ec, roughness: 0.6 });
-  const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.62, 20), cromo); spinner.rotation.z = -Math.PI / 2; spinner.position.x = 0.31; g.add(spinner);
+  const negro = new THREE.MeshStandardMaterial({ color: 0x181b1d, roughness: 0.7 }), blanco = new THREE.MeshStandardMaterial({ color: 0xf0f0ec, roughness: 0.6 });
   for (let i = 0; i < 5; i++) {
     const pala = new THREE.Group(); pala.rotation.x = i * Math.PI * 2 / 5;
     const hoja = new THREE.Mesh(new THREE.BoxGeometry(0.035, 1.25, 0.2), negro); hoja.position.y = 0.2 + 0.625; hoja.rotation.y = 0.45; pala.add(hoja);
@@ -46,11 +45,11 @@ export async function crearAT802GLB({ matricula: mat = 'AUR-AV', url = './at802.
   let helice = modelo.getObjectByName('helice');
   if (!helice) { helice = crearHelice(); helice.position.set(...HELICE.pos); helice.rotation.z = HELICE.cabeceo; avion.add(helice); }
   for (const [nombre, pos] of Object.entries(ANCLAJES)) { const a = new THREE.Object3D(); a.name = nombre; a.position.set(...pos); avion.add(a); }
-  // matrícula a ambos lados del fuselaje trasero
+// matrícula a ambos lados del fuselaje trasero, pegada a la chapa (semiancho medido: 0,30 en x=−4,4 → 0,22 en x=−5,2)
   const mMat = matricula(mat);
   for (const s of [-1, 1]) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.24), mMat);
-    m.position.set(-5.0, 1.95, s * 0.5); m.rotation.y = s > 0 ? Math.PI / 2 - 0.15 : -Math.PI / 2 + 0.15; m.rotation.x = s * 0.12; m.name = 'matricula'; avion.add(m);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.18), mMat);
+    m.position.set(-4.7, 1.9, s * 0.275); m.rotation.y = s > 0 ? -0.1 : Math.PI + 0.1; m.name = 'matricula'; avion.add(m);
   }
   // disco de hélice en marcha
   const disco = new THREE.Mesh(new THREE.CircleGeometry(1.45, 40), new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
