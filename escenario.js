@@ -131,13 +131,39 @@ export function crearEscenario(escena) {
     tg.setAttribute('color', new THREE.BufferAttribute(col, 3)); tg.computeVertexNormals();
     const terreno = new THREE.Mesh(tg, M('#ffffff', { map: tex('./tex/sierra.jpg', 90), vertexColors: true, roughness: 0.95 })); terreno.rotation.x = -Math.PI / 2; terreno.position.y = -0.5; escena.add(terreno); }
   const o = new THREE.Object3D();
-  const N = 110, trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.25, 1, 6), M('#66513b'), N);
-  const crowns = Array.from({ length: 3 }, () => new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7), M('#526f55', { flatShading: true }), N));
-  for (let i = 0; i < N; i++) {
-    const a = rnd() * Math.PI * 2, r = 75 + rnd() * 140, h = 6 + rnd() * 7; let x = Math.cos(a) * r; const z = Math.sin(a) * r; if (Math.abs(x - 30) < 20) x += x >= 30 ? 40 : -40; const rot = rnd() * Math.PI;
-    o.rotation.set(0, rot, 0); o.position.set(x, h * 0.21, z); o.scale.set(1, h * 0.42, 1); o.updateMatrix(); trunks.setMatrixAt(i, o.matrix);
-    for (let k = 0; k < 3; k++) { o.position.set(x, h * (0.32 + k * 0.23), z); o.scale.set(h * (0.27 - k * 0.065), h * 0.55, h * (0.27 - k * 0.065)); o.rotation.y = rot + k * 0.5; o.updateMatrix(); crowns[k].setMatrixAt(i, o.matrix); crowns[k].setColorAt(i, new THREE.Color().setHSL(0.29 + rnd() * 0.05, 0.16 + rnd() * 0.12, 0.62 + k * 0.055)); }
-  } escena.add(trunks, ...crowns);
+  // Árboles: pinos y árboles de copa redonda como planos cruzados con textura pintada por código (alpha).
+  // Mucho más real que los conos y barato para el Quest (2 quads por árbol, una sola InstancedMesh por tipo).
+  const texArbol = (tipo) => {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 512; const g = cv.getContext('2d'); g.clearRect(0, 0, 256, 512);
+    let sd = tipo === 'pino' ? 11 : 29; const rn = () => { sd = (sd * 16807) % 2147483647; return (sd - 1) / 2147483646; };
+    // tronco
+    g.fillStyle = '#5a4634'; g.beginPath(); g.moveTo(118, 512); g.lineTo(138, 512); g.lineTo(132, 300); g.lineTo(124, 300); g.closePath(); g.fill();
+    if (tipo === 'pino') {
+      for (let y = 470; y > 40; y -= 9) { const w = 8 + (y - 40) * 0.24 + rn() * 12; const t = (y - 40) / 430;
+        for (let k = 0; k < 14; k++) { const x = 128 + (rn() - 0.5) * 2 * w, yy = y + (rn() - 0.5) * 14; const c = 0.30 + 0.16 * (1 - Math.abs(x - 128) / (w + 1)) + rn() * 0.08;
+          g.fillStyle = `hsl(${112 + rn() * 18}, ${26 + rn() * 12}%, ${Math.round(c * 62 * (0.7 + 0.3 * (1 - t)))}%)`; g.beginPath(); g.ellipse(x, yy, 6 + rn() * 9, 3 + rn() * 4, (rn() - 0.5) * 0.8, 0, Math.PI * 2); g.fill(); } }
+    } else {
+      for (let k = 0; k < 420; k++) { const a = rn() * Math.PI * 2, r = Math.sqrt(rn()) * 100; const x = 128 + Math.cos(a) * r, y = 190 + Math.sin(a) * r * 0.9; const c = 0.28 + 0.2 * (1 - r / 100) + rn() * 0.1;
+        g.fillStyle = `hsl(${84 + rn() * 26}, ${30 + rn() * 14}%, ${Math.round(c * 68)}%)`; g.beginPath(); g.ellipse(x, y, 9 + rn() * 12, 7 + rn() * 9, rn() * 3, 0, Math.PI * 2); g.fill(); }
+    }
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+  };
+  const geoCruz = (() => { const a = new THREE.PlaneGeometry(1, 2), b = a.clone().rotateY(Math.PI / 2); a.translate(0, 1, 0); b.translate(0, 1, 0);
+    const g = new THREE.BufferGeometry(); const pos = [...a.attributes.position.array, ...b.attributes.position.array], uv = [...a.attributes.uv.array, ...b.attributes.uv.array], nor = [...a.attributes.normal.array, ...b.attributes.normal.array];
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setIndex([...a.index.array, ...Array.from(b.index.array, i => i + 4)]); return g; })();
+  const N = 150, tipos = ['pino', 'copa'];
+  const arboles = tipos.map(tp => new THREE.InstancedMesh(geoCruz, new THREE.MeshStandardMaterial({ map: texArbol(tp), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.95 }), N));
+  const cnt = [0, 0];
+  for (let i = 0; i < N * 2; i++) {
+    const a = rnd() * Math.PI * 2, r = 70 + rnd() * 150; let x = Math.cos(a) * r; const z = Math.sin(a) * r; if (Math.abs(x - 30) < 22) x += x >= 30 ? 44 : -44;
+    const tp = rnd() < 0.62 ? 0 : 1, h = tp === 0 ? 8 + rnd() * 8 : 6 + rnd() * 5;
+    o.position.set(x, -0.1, z); o.rotation.set(0, rnd() * Math.PI, 0); o.scale.set(h * (tp === 0 ? 0.42 : 0.62), h * 0.5, h * (tp === 0 ? 0.42 : 0.62)); o.updateMatrix();
+    if (cnt[tp] < N) { arboles[tp].setMatrixAt(cnt[tp], o.matrix); arboles[tp].setColorAt(cnt[tp], new THREE.Color().setHSL(0.25, 0.08, 0.6 + rnd() * 0.2)); cnt[tp]++; }
+  }
+  for (const [k, m] of arboles.entries()) { m.count = cnt[k]; m.castShadow = true; escena.add(m); }
+  // Autobomba (Tripo, texto a 3D, 28/9) estacionada al costado del hangar 01, mirando a la plataforma
+  new GLTFLoader().load('./autobomba.glb', gltf => { const m = gltf.scene; m.position.set(-27, 0, -4); m.rotation.y = Math.PI / 2 + 0.35; m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); m.name = 'autobomba'; escena.add(m); }, undefined, e => console.warn('autobomba.glb no cargó', e));
   // manga de viento
   { const palo = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 8, 12), mats.white); palo.position.set(14, 4, 7); escena.add(palo);
     const sock = new THREE.Group(); sock.position.set(14, 8, 7); sock.rotation.z = -Math.PI / 2.5;
@@ -202,8 +228,23 @@ export function crearEquipoCarga(desde, hasta) {
   // Motobomba de Tripo (texto a 3D, 28/9): reemplaza a la de cajas cuando carga; la boca de la bomba mira a +x.
   new GLTFLoader().load('./motobomba.glb', gltf => { const m = gltf.scene; m.position.copy(desde); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); m.name = 'motobomba-glb'; g.add(m); mb.visible = false; }, undefined, e => console.warn('motobomba.glb no cargó', e));
   // manguera de aspiración (tanque → bomba) y de impulsión (bomba → acople)
-  const mManguera = mat(0x1d3d6b, { roughness: 0.7 });
-  const tubo = (pts, r) => { const c = new THREE.CatmullRomCurve3(pts); const m = new THREE.Mesh(new THREE.TubeGeometry(c, 40, r, 8), mManguera); m.castShadow = true; g.add(m); return m; };
+  // Manguera: textura de trama (tejido) pintada por código, repetida a lo largo del tubo.
+  const texManguera = (() => { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const c = cv.getContext('2d');
+    c.fillStyle = '#243f66'; c.fillRect(0, 0, 256, 64);
+    for (let x = 0; x < 256; x += 4) for (let y = 0; y < 64; y += 4) { const k = ((x / 4 + y / 4) % 2) ? 0.08 : -0.06; c.fillStyle = `rgba(${k > 0 ? 255 : 0},${k > 0 ? 255 : 0},${k > 0 ? 255 : 0},${Math.abs(k)})`; c.fillRect(x, y, 4, 4); }
+    c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1; for (let x = -64; x < 320; x += 12) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 32, 64); c.stroke(); }
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; })();
+  const mManguera = new THREE.MeshStandardMaterial({ map: texManguera, roughness: 0.85 });
+  const mAluminio = mat(0xb8bec4, { metalness: 0.75, roughness: 0.35 });
+  const tubo = (pts, r) => { const c = new THREE.CatmullRomCurve3(pts); const L = c.getLength(); const mm = mManguera.clone(); mm.map = texManguera.clone(); mm.map.repeat.set(L / 0.6, 1); mm.map.needsUpdate = true;
+    const m = new THREE.Mesh(new THREE.TubeGeometry(c, Math.max(24, Math.round(L * 6)), r, 10), mm); m.castShadow = true; g.add(m);
+    // abrazaderas cada ~1,2 m y acoples camlock de aluminio en las puntas
+    for (let u = 0.08; u < 0.97; u += 1.2 / L) { const p = c.getPointAt(u), tg = c.getTangentAt(u); const ab = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.008, r + 0.008, 0.03, 10), mAluminio); ab.position.copy(p); ab.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tg); g.add(ab); }
+    for (const u of [0, 1]) { const p = c.getPointAt(u), tg = c.getTangentAt(u); const ac = new THREE.Group(); ac.position.copy(p); ac.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tg);
+      const cuerpo = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.014, r + 0.014, 0.13, 12), mAluminio); ac.add(cuerpo);
+      for (const sgn of [-1, 1]) { const brazo = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.075, 0.02), mAluminio); brazo.position.set(sgn * (r + 0.02), 0.01, 0); brazo.rotation.z = sgn * 0.5; ac.add(brazo); }
+      const aro = new THREE.Mesh(new THREE.TorusGeometry(r + 0.016, 0.006, 6, 16), mAluminio); aro.rotation.x = Math.PI / 2; aro.position.y = 0.05; ac.add(aro); ac.name = 'acople'; g.add(ac); }
+    return m; };
   tubo([new THREE.Vector3(desde.x - 1.7, 0.5, desde.z + 0.4), new THREE.Vector3(desde.x - 0.8, 0.08, desde.z + 0.2), new THREE.Vector3(desde.x + 0.35, 0.22, desde.z)], 0.045);
   const medio = new THREE.Vector3().lerpVectors(desde, hasta, 0.5);
   tubo([new THREE.Vector3(desde.x + 0.35, 0.22, desde.z), new THREE.Vector3(desde.x + 1.2, 0.06, desde.z - 0.3), new THREE.Vector3(medio.x, 0.06, medio.z + 0.4),
