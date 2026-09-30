@@ -4,7 +4,7 @@
 // Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar, y los anclajes
 // 'acople-carga', 'acople-carga-derecho', 'cabina-piloto' y 'helice'.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260929b';
+import { GLTFLoader } from './GLTFLoader.js?v=20260929c';
 
 // Anclajes en coordenadas del avión (metros). Válvulas: bajo la panza detrás de la tolva (fotos AAXOD 24/9).
 // Modelo actual (29/9): AT-802 generado en Tripo a partir de la maqueta de madera de AAXOD, repintado con el

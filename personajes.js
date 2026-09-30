@@ -113,7 +113,7 @@ export function crearPiloto() {
 }
 
 // ---------- Modelos GLB de terceros (Sketchfab, CC BY 4.0; ver README) con la misma API que los procedurales
-import { GLTFLoader } from './GLTFLoader.js?v=20260929b';
+import { GLTFLoader } from './GLTFLoader.js?v=20260929c';
 export async function cargarGLB(url) { return new GLTFLoader().loadAsync(url); }
 
 // Escaneo estático de una persona (pose de caminata): se desliza y cabecea un poco al caminar.

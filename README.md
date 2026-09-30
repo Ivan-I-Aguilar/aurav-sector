@@ -27,5 +27,6 @@ Se juega en computadora, celular y Meta Quest (botón «Entrar en VR»).
 - **Vecino** `vecino.glb`: «Casual Stride» de restore50 — https://sketchfab.com/3d-models/casual-stride-26bcaa5dcc9b4f00b449 — escaneo reducido a 13 k triángulos, texturas 1K.
 - **Periodista** `periodista.glb`: «Stride Forward» de restore50 — https://sketchfab.com/3d-models/stride-forward-adfa2206a63d4dae8b7 — ídem, con cámara agregada en código.
 - **Piloto** `piloto.glb`: «Pilot low poly character» de 00amza — https://sketchfab.com/3d-models/pilot-low-poly-character-867084949893461 — rig Mixamo; en el juego levanta el brazo para la seña.
+- **Bombero** `bombero.glb`: «Firefighter (free download)» de jakobscheidt — https://sketchfab.com/3d-models/firefighter-free-download-042691a0afb8497798bc50174f633e68 — reducido de 51 k a 26 k triángulos, texturas WebP 1K/512.
 - Descartados: «Fuel truck» (camión cisterna de 15 m, no corresponde a AAXOD) y «Cane and Confidence».
 Si alguno no carga, el juego vuelve a los modelos procedurales de `vehiculos.js` / `personajes.js`.

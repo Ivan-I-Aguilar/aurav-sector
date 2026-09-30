@@ -1,19 +1,19 @@
 // AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
-import { crearAT802 } from './at802.js?v=20260929b';
-import { crearAT802GLB } from './at802glb.js?v=20260929b';
-import { crearConjunto } from './vehiculos.js?v=20260929b';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260929b';
-import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260929b';
-import { crearAudio } from './audio.js?v=20260929b';
-import { Panel } from './panel.js?v=20260929b';
-import { Mision, EVENTOS } from './mision.js?v=20260929b';
-import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260929b';
-import { Manejo, Entrada } from './manejo.js?v=20260929b';
-import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260929b';
-import { Despegue } from './despegue.js?v=20260929b';
-import { Constancia } from './constancia.js?v=20260929b';
+import { crearAT802 } from './at802.js?v=20260929c';
+import { crearAT802GLB } from './at802glb.js?v=20260929c';
+import { crearConjunto } from './vehiculos.js?v=20260929c';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260929c';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260929c';
+import { crearAudio } from './audio.js?v=20260929c';
+import { Panel } from './panel.js?v=20260929c';
+import { Mision, EVENTOS } from './mision.js?v=20260929c';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260929c';
+import { Manejo, Entrada } from './manejo.js?v=20260929c';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260929c';
+import { Despegue } from './despegue.js?v=20260929c';
+import { Constancia } from './constancia.js?v=20260929c';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -67,7 +67,7 @@ piloto.position.set(0, -0.05, 0); asiento.add(piloto);
 piloto.visible = false;   // 29/9: en el visor se lo veía parado sobre el ala; se lo oculta (la situación «seña del piloto» sigue funcionando con el proxy)
 // personas escaneadas (Sketchfab, CC BY) para el vecino y el periodista; el resto, procedurales
 const MODELOS_PERSONA = {};
-for (const [tipo, url, op] of [['vecino', './vecino.glb', {}], ['periodista', './periodista.glb', { camara: true }]]) { try { MODELOS_PERSONA[tipo] = { gltf: await cargarGLB(url), op }; } catch (e) { console.warn(url, 'no cargó', e); } }
+for (const [tipo, url, op] of [['vecino', './vecino.glb', {}], ['periodista', './periodista.glb', { camara: true }], ['bombero', './bombero.glb', {}]]) { try { MODELOS_PERSONA[tipo] = { gltf: await cargarGLB(url), op }; } catch (e) { console.warn(url, 'no cargó', e); } }
 const posAcople = avion.getObjectByName(LADO_CARGA === 'derecho' ? 'acople-carga-derecho' : 'acople-carga').getWorldPosition(new THREE.Vector3());
 
 const ESTACIONAMIENTO = { pos: V(-7.5, 0, 19.5), rumbo: 0.05 };     // A VALIDAR con AAXOD: lugar de la camioneta durante la carga
