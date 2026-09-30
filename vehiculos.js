@@ -2,11 +2,11 @@
 // Modelos procedurales de la revisión 04 de ChatGPT (frontier.js, cisterna.js), integrados por AURAV.
 // Ejes: +x adelante, +y arriba. Unidades en metros. La cisterna cuelga del enganche de la camioneta.
 import * as THREE from './three.module.js';
-import { crearFrontier } from './frontier.js?v=20260929c';
-import { crearCisterna } from './cisterna.js?v=20260929c';
+import { crearFrontier } from './frontier.js?v=20260930a';
+import { crearCisterna } from './cisterna.js?v=20260930a';
 export { crearFrontier, crearCisterna };
 
-import { GLTFLoader } from './GLTFLoader.js?v=20260929c';
+import { GLTFLoader } from './GLTFLoader.js?v=20260930a';
 // Nissan D21 1997 (Sketchfab, MAXVERSTAPPEN2025, CC BY 4.0), reducida a 54k triángulos, blanca. Si no carga, la Frontier procedural.
 async function crearD21() {
   const g = await new GLTFLoader().loadAsync('./d21.glb');

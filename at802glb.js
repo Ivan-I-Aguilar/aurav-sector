@@ -1,19 +1,20 @@
-// AT-802 de AAXOD generado con Tripo a partir de las fotos del hangar (27/9/2026) y procesado por AURAV:
-// sin barra de aspersión, escala real (envergadura 18,06 m), +x nariz, +z derecha, origen en el suelo entre las
-// ruedas principales, actitud de tres puntos, hélice en un nodo 'helice', ~69.000 triángulos, textura 2K.
+// AT-802 de AAXOD: modelo de simulador de vuelo (compartido gratis por su diseñador en Telegram, 30/9/2026),
+// convertido y repintado con el esquema real por AURAV (herramientas/obj-a-glb.mjs + pintar-sim.mjs): envergadura
+// 18,04 m, +x nariz, +z derecha, origen en el suelo entre las ruedas principales, actitud de tres puntos,
+// hélice en el nodo 'helice' (gira sobre su x), 45.000 triángulos, texturas 2K.
 // Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar, y los anclajes
 // 'acople-carga', 'acople-carga-derecho', 'cabina-piloto' y 'helice'.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260929c';
+import { GLTFLoader } from './GLTFLoader.js?v=20260930a';
 
 // Anclajes en coordenadas del avión (metros). Válvulas: bajo la panza detrás de la tolva (fotos AAXOD 24/9).
-// Modelo actual (29/9): AT-802 generado en Tripo a partir de la maqueta de madera de AAXOD, repintado con el
-// esquema real. Nariz en x=3.19, eje del capó a y≈2.16 (actitud de tres puntos), panza de la tolva a y≈0.78.
+// Panza de la tolva a y≈0,75 en x=−1,6 (medido en el modelo del simulador).
 const ANCLAJES = {
   'acople-carga': [-1.6, 0.74, -1.0],
   'acople-carga-derecho': [-1.6, 0.74, 1.0],
   'cabina-piloto': [-1.7, 1.78, 0],
 };
+const ACTITUD = Math.atan2(0.86, 7.04);   // cabeceo de tres puntos del modelo
 const HELICE = { pos: [2.78, 2.16, 0], cabeceo: 0.10 };   // raíz de las palas (dentro del cono de la maqueta, que va de x 2,5 a 3,19) y elevación del eje
 
 // Hélice de código (la maqueta la tenía rota): 5 palas negras con puntas blancas. El cono (spinner) es el de la maqueta.
@@ -45,11 +46,11 @@ export async function crearAT802GLB({ matricula: mat = 'AUR-AV', url = './at802.
   let helice = modelo.getObjectByName('helice');
   if (!helice) { helice = crearHelice(); helice.position.set(...HELICE.pos); helice.rotation.z = HELICE.cabeceo; avion.add(helice); }
   for (const [nombre, pos] of Object.entries(ANCLAJES)) { const a = new THREE.Object3D(); a.name = nombre; a.position.set(...pos); avion.add(a); }
-// matrícula a ambos lados del fuselaje trasero, pegada a la chapa (semiancho medido: 0,30 en x=−4,4 → 0,22 en x=−5,2)
+  // matrícula a ambos lados del fuselaje trasero, arriba de las franjas, pegada a la chapa (semiancho 0,45 en x=−4,6) y con la actitud de tres puntos
   const mMat = matricula(mat);
   for (const s of [-1, 1]) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.18), mMat);
-    m.position.set(-4.7, 1.9, s * 0.275); m.rotation.y = s > 0 ? -0.1 : Math.PI + 0.1; m.name = 'matricula'; avion.add(m);
+    m.position.set(-4.6, 2.12, s * 0.435); m.rotation.set(0, s > 0 ? -0.14 : Math.PI + 0.14, s > 0 ? ACTITUD : -ACTITUD, 'YXZ'); m.name = 'matricula'; avion.add(m);
   }
   // disco de hélice en marcha
   const disco = new THREE.Mesh(new THREE.CircleGeometry(1.45, 40), new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
@@ -59,6 +60,6 @@ export async function crearAT802GLB({ matricula: mat = 'AUR-AV', url = './at802.
   avion.userData.motor = false;
   avion.userData.ponerMotor = en => { avion.userData.motor = en; disco.visible = en; };
   avion.userData.actualizar = dt => { if (avion.userData.motor && helice) helice.rotation.x += dt * 40; };
-  avion.userData.origen = 'maqueta';
+  avion.userData.origen = 'simulador';
   return avion;
 }
