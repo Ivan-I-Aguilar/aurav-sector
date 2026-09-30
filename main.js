@@ -1,19 +1,19 @@
 // AURAV · Control del sector — carga de agua de un AT-802 con motor en marcha.
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
-import { crearAT802 } from './at802.js?v=20260930a';
-import { crearAT802GLB } from './at802glb.js?v=20260930a';
-import { crearConjunto } from './vehiculos.js?v=20260930a';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260930a';
-import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260930a';
-import { crearAudio } from './audio.js?v=20260930a';
-import { Panel } from './panel.js?v=20260930a';
-import { Mision, EVENTOS } from './mision.js?v=20260930a';
-import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260930a';
-import { Manejo, Entrada } from './manejo.js?v=20260930a';
-import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260930a';
-import { Despegue } from './despegue.js?v=20260930a';
-import { Constancia } from './constancia.js?v=20260930a';
+import { crearAT802 } from './at802.js?v=20260930b';
+import { crearAT802GLB } from './at802glb.js?v=20260930b';
+import { crearConjunto } from './vehiculos.js?v=20260930b';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20260930b';
+import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20260930b';
+import { crearAudio } from './audio.js?v=20260930b';
+import { Panel } from './panel.js?v=20260930b';
+import { Mision, EVENTOS } from './mision.js?v=20260930b';
+import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20260930b';
+import { Manejo, Entrada } from './manejo.js?v=20260930b';
+import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20260930b';
+import { Despegue } from './despegue.js?v=20260930b';
+import { Constancia } from './constancia.js?v=20260930b';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -175,7 +175,7 @@ function caminar(dt) {
   if (Math.abs(velCaminar.x) < 0.01 && Math.abs(velCaminar.y) < 0.01) { velCaminar.set(0, 0); return; }
   const dir = camara.getWorldDirection(new THREE.Vector3()); dir.y = 0; dir.normalize();
   const lado = V(dir.z, 0, -dir.x);
-  rig.position.addScaledVector(dir, velCaminar.x * VEL_CAMINAR * dt).addScaledVector(lado, -velCaminar.y * VEL_CAMINAR * dt);
+  rig.position.addScaledVector(dir, velCaminar.x * VEL_CAMINAR * dt).addScaledVector(lado, velCaminar.y * VEL_CAMINAR * dt);   // lado = izquierda de la mirada; A (lateral +1) va a la izquierda
   rig.position.y = 0;
 }
 const POS_BOMBA = V(-4.4, 0, 12.2);

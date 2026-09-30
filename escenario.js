@@ -1,7 +1,7 @@
 // Escenario: pista de tierra en el campo, cielo, arboleda, humo de incendio a lo lejos,
 // y el diagrama de ángulos de aproximación del MOE 3.4 dibujado en el suelo.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260930a';
+import { GLTFLoader } from './GLTFLoader.js?v=20260930b';
 
 const mat = (c, e = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, ...e });
 
@@ -245,10 +245,10 @@ export function crearEquipoCarga(desde, hasta) {
       for (const sgn of [-1, 1]) { const brazo = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.075, 0.02), mAluminio); brazo.position.set(sgn * (r + 0.02), 0.01, 0); brazo.rotation.z = sgn * 0.5; ac.add(brazo); }
       const aro = new THREE.Mesh(new THREE.TorusGeometry(r + 0.016, 0.006, 6, 16), mAluminio); aro.rotation.x = Math.PI / 2; aro.position.y = 0.05; ac.add(aro); ac.name = 'acople'; g.add(ac); }
     return m; };
-  tubo([new THREE.Vector3(desde.x - 1.7, 0.5, desde.z + 0.4), new THREE.Vector3(desde.x - 0.8, 0.08, desde.z + 0.2), new THREE.Vector3(desde.x + 0.35, 0.22, desde.z)], 0.045);
+  tubo([new THREE.Vector3(desde.x - 1.7, 0.5, desde.z + 0.4), new THREE.Vector3(desde.x - 0.8, 0.1, desde.z + 0.2), new THREE.Vector3(desde.x + 0.35, 0.22, desde.z)], 0.045);
   const medio = new THREE.Vector3().lerpVectors(desde, hasta, 0.5);
-  tubo([new THREE.Vector3(desde.x + 0.35, 0.22, desde.z), new THREE.Vector3(desde.x + 1.2, 0.06, desde.z - 0.3), new THREE.Vector3(medio.x, 0.06, medio.z + 0.4),
-    new THREE.Vector3(hasta.x - 0.2, 0.08, hasta.z + 0.5), new THREE.Vector3(hasta.x, hasta.y - 0.25, hasta.z + 0.25), hasta.clone()], 0.04).name = 'manguera-impulsion';
+  tubo([new THREE.Vector3(desde.x + 0.35, 0.22, desde.z), new THREE.Vector3(desde.x + 1.2, 0.09, desde.z - 0.3), new THREE.Vector3(medio.x, 0.09, medio.z + 0.4),
+    new THREE.Vector3(hasta.x - 0.2, 0.1, hasta.z + 0.5), new THREE.Vector3(hasta.x, Math.max(0.2, hasta.y - 0.3), hasta.z + 0.12), hasta.clone()], 0.04).name = 'manguera-impulsion';
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }

@@ -5,13 +5,13 @@
 // Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar, y los anclajes
 // 'acople-carga', 'acople-carga-derecho', 'cabina-piloto' y 'helice'.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260930a';
+import { GLTFLoader } from './GLTFLoader.js?v=20260930b';
 
 // Anclajes en coordenadas del avión (metros). Válvulas: bajo la panza detrás de la tolva (fotos AAXOD 24/9).
 // Panza de la tolva a y≈0,75 en x=−1,6 (medido en el modelo del simulador).
 const ANCLAJES = {
-  'acople-carga': [-1.6, 0.74, -1.0],
-  'acople-carga-derecho': [-1.6, 0.74, 1.0],
+  'acople-carga': [-1.6, 0.635, -0.5],          // boca del camlock de cada válvula (ver más abajo)
+  'acople-carga-derecho': [-1.6, 0.635, 0.5],
   'cabina-piloto': [-1.7, 1.78, 0],
 };
 const ACTITUD = Math.atan2(0.86, 7.04);   // cabeceo de tres puntos del modelo
@@ -46,11 +46,18 @@ export async function crearAT802GLB({ matricula: mat = 'AUR-AV', url = './at802.
   let helice = modelo.getObjectByName('helice');
   if (!helice) { helice = crearHelice(); helice.position.set(...HELICE.pos); helice.rotation.z = HELICE.cabeceo; avion.add(helice); }
   for (const [nombre, pos] of Object.entries(ANCLAJES)) { const a = new THREE.Object3D(); a.name = nombre; a.position.set(...pos); avion.add(a); }
-  // matrícula a ambos lados del fuselaje trasero, arriba de las franjas, pegada a la chapa (semiancho 0,45 en x=−4,6) y con la actitud de tres puntos
-  const mMat = matricula(mat);
-  for (const s of [-1, 1]) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.18), mMat);
-    m.position.set(-4.6, 2.12, s * 0.435); m.rotation.set(0, s > 0 ? -0.14 : Math.PI + 0.14, s > 0 ? ACTITUD : -ACTITUD, 'YXZ'); m.name = 'matricula'; avion.add(m);
+  // (la matrícula AUR-AV va pintada en la textura del fuselaje: herramientas/pintar-sim.mjs)
+  // válvulas de carga (el modelo del simulador no las trae): caño transversal bajo la panza detrás de la tolva,
+  // cuerpo de válvula y codo con camlock hacia abajo a cada lado, como en las fotos del hangar (24/9)
+  { const gris = new THREE.MeshStandardMaterial({ color: 0x8d949a, metalness: 0.6, roughness: 0.4 }), verde = new THREE.MeshStandardMaterial({ color: 0x3f5a3a, roughness: 0.7 }), rojo = new THREE.MeshStandardMaterial({ color: 0xb00e26, roughness: 0.5 });
+    const X = -1.6, Y = 0.86, Z = 0.5;
+    const cano = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2 * Z, 12), verde); cano.rotation.x = Math.PI / 2; cano.position.set(X, Y, 0); avion.add(cano);
+    for (const s of [-1, 1]) {
+      const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.12), gris); cuerpo.position.set(X, Y, s * (Z - 0.08)); avion.add(cuerpo);
+      const palanca = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.2, 0.03), rojo); palanca.position.set(X + 0.09, Y - 0.1, s * (Z - 0.08)); avion.add(palanca);
+      const codo = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 12), gris); codo.position.set(X, Y - 0.1, s * Z); avion.add(codo);
+      const boca = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 14), gris); boca.position.set(X, Y - 0.2, s * Z); avion.add(boca);
+    }
   }
   // disco de hélice en marcha
   const disco = new THREE.Mesh(new THREE.CircleGeometry(1.45, 40), new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
