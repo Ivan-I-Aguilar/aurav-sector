@@ -1,7 +1,7 @@
 // Escenario: pista de tierra en el campo, cielo, arboleda, humo de incendio a lo lejos,
 // y el diagrama de ángulos de aproximación del MOE 3.4 dibujado en el suelo.
 import * as THREE from './three.module.js';
-import { GLTFLoader } from './GLTFLoader.js?v=20260930b';
+import { GLTFLoader } from './GLTFLoader.js?v=20260930c';
 
 const mat = (c, e = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, ...e });
 
