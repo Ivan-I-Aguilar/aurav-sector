@@ -2,11 +2,11 @@
 // Modelos procedurales de la revisión 04 de ChatGPT (frontier.js, cisterna.js), integrados por AURAV.
 // Ejes: +x adelante, +y arriba. Unidades en metros. La cisterna cuelga del enganche de la camioneta.
 import * as THREE from './three.module.js';
-import { crearFrontier } from './frontier.js?v=20260930c';
-import { crearCisterna } from './cisterna.js?v=20260930c';
+import { crearFrontier } from './frontier.js?v=20261006a';
+import { crearCisterna } from './cisterna.js?v=20261006a';
 export { crearFrontier, crearCisterna };
 
-import { GLTFLoader } from './GLTFLoader.js?v=20260930c';
+import { GLTFLoader } from './GLTFLoader.js?v=20261006a';
 // Nissan D21 1997 (Sketchfab, MAXVERSTAPPEN2025, CC BY 4.0), reducida a 54k triángulos, blanca. Si no carga, la Frontier procedural.
 async function crearD21() {
   const g = await new GLTFLoader().loadAsync('./d21.glb');
@@ -15,13 +15,23 @@ async function crearD21() {
   c.userData.enganche = enganche; c.userData.asiento = [-0.05, -0.25, -0.42]; c.userData.modelo = 'd21';
   return c;
 }
+// Toyota Hilux 2007 (Sketchfab, David_Holiday, CC BY 4.0), reducida a ~65k triángulos, blanca, con interior y volante propios.
+async function crearHilux() {
+  const g = await new GLTFLoader().loadAsync('./hilux.glb');
+  const c = new THREE.Group(); c.add(g.scene); c.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const enganche = new THREE.Object3D(); enganche.name = 'enganche'; enganche.position.set(-2.62, 0.48, 0); c.add(enganche);
+  c.userData.enganche = enganche; c.userData.asiento = [0.38, -0.22, -0.4]; c.userData.modelo = 'hilux';
+  return c;
+}
 export async function crearConjunto({ anguloCisterna = 0 } = {}) {
-  let camioneta; try { camioneta = await crearD21(); } catch (e) { console.warn('No se pudo cargar d21.glb, se usa la Frontier procedural', e); camioneta = crearFrontier(); }
+  let camioneta; try { camioneta = await crearHilux(); } catch (e) { console.warn('No se pudo cargar hilux.glb, se usa la D21', e);
+    try { camioneta = await crearD21(); } catch (e2) { console.warn('No se pudo cargar d21.glb, se usa la Frontier procedural', e2); camioneta = crearFrontier(); } }
   camioneta.name = 'conjunto-camioneta-cisterna';
   const cisterna = crearCisterna();
   camioneta.userData.enganche.add(cisterna);
   cisterna.rotation.y = anguloCisterna;
   camioneta.userData.cisterna = cisterna;
+  if (camioneta.userData.modelo === 'hilux') { camioneta.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); return camioneta; }   // la Hilux trae volante y tablero
   // volante y columna del lado del chofer (izquierda, -z), para la etapa de manejo en primera persona
   // (la D21 de Sketchfab viene sin volante ni tablero: se agregan por código en el asiento del chofer)
   const d21 = camioneta.userData.modelo === 'd21';

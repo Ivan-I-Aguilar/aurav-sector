@@ -23,7 +23,8 @@ Se juega en computadora, celular y Meta Quest (botón «Entrar en VR»).
 
 ## Modelos de terceros (Sketchfab, licencia CC BY 4.0 — se debe mantener este crédito)
 
-- **Camioneta** `d21.glb`: «Nissan d21 1997» de MAXVERSTAPPEN2025 — https://sketchfab.com/3d-models/nissan-d21-1997-eba0b6d767c84ccdafa973e966e1d7db — reducida de 1,7 M a 54 k triángulos, pintada de blanco con neumáticos oscuros (colores por vértice).
+- **Camioneta** `hilux.glb`: «Toyota Hilux 2007» de David_Holiday — https://sketchfab.com/3d-models/toyota-hilux-2007-0234ebed01ee4b87affed0e58673247e — sin líneas de borde, reducida a ~65 k triángulos, pintada de blanco, vidrios aclarados.
+- **Camioneta anterior (respaldo)** `d21.glb`: «Nissan d21 1997» de MAXVERSTAPPEN2025 — https://sketchfab.com/3d-models/nissan-d21-1997-eba0b6d767c84ccdafa973e966e1d7db — reducida de 1,7 M a 54 k triángulos, pintada de blanco con neumáticos oscuros (colores por vértice).
 - **Vecino** `vecino.glb`: «Casual Stride» de restore50 — https://sketchfab.com/3d-models/casual-stride-26bcaa5dcc9b4f00b449 — escaneo reducido a 13 k triángulos, texturas 1K.
 - **Periodista** `periodista.glb`: «Stride Forward» de restore50 — https://sketchfab.com/3d-models/stride-forward-adfa2206a63d4dae8b7 — ídem, con cámara agregada en código.
 - **Piloto** `piloto.glb`: «Pilot low poly character» de 00amza — https://sketchfab.com/3d-models/pilot-low-poly-character-867084949893461 — rig Mixamo; en el juego levanta el brazo para la seña.
