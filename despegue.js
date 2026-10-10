@@ -22,8 +22,9 @@ export class Despegue {
     if (this.manguera) this.manguera.visible = true;
     if (this.piloto) this.piloto.userData.seña = false;
   }
-  empezar() {
+  empezar({ mangueraRetirada = false } = {}) {
     this.reset(); this.fase = 'saludo'; this.t = 0;
+    if (mangueraRetirada && this.manguera) this.manguera.visible = false;   // ya la desconectó el apoyo
     this.avion.userData.ponerMotor(true);
     if (this.sonido && !this.sonido.isPlaying) this.sonido.play();
     if (this.piloto) this.piloto.userData.seña = true;
@@ -35,7 +36,7 @@ export class Despegue {
     this.t += dt;
     const a = this.avion;
     if (this.fase === 'saludo') {
-      if (this.t > 2.2 && this.manguera) this.manguera.visible = false;       // el ET retira la manguera
+      if (this.t > 2.2 && this.manguera) this.manguera.visible = false;       // (por si no la retiró el apoyo)
       if (this.t > 3.5) { this.fase = 'rodaje'; if (this.piloto) this.piloto.userData.seña = false; }
     } else if (this.fase === 'rodaje') {
       this.v = Math.min(V_RODAJE, this.v + 1.5 * dt);

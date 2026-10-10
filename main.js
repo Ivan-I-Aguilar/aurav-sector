@@ -4,7 +4,7 @@ import * as THREE from './three.module.js';
 import { crearAT802 } from './at802.js?v=20261006a';
 import { crearAT802GLB } from './at802glb.js?v=20261006a';
 import { crearConjunto } from './vehiculos.js?v=20261006a';
-import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20261006a';
+import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20261010a';
 import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20261006a';
 import { crearAudio } from './audio.js?v=20261006a';
 import { Panel } from './panel.js?v=20261006a';
@@ -12,8 +12,9 @@ import { Mision, EVENTOS } from './mision.js?v=20261006a';
 import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20261006a';
 import { Manejo, Entrada } from './manejo.js?v=20261006a';
 import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20261006a';
-import { Despegue } from './despegue.js?v=20261006a';
+import { Despegue } from './despegue.js?v=20261010a';
 import { Constancia } from './constancia.js?v=20261006a';
+import { crearSenaleroGLB } from './senalero.js?v=20261010a';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -38,6 +39,8 @@ let yaw = 0.25, pitch = -0.08;
 function aplicarMirada() { camara.rotation.set(pitch, yaw, 0, 'YXZ'); }
 aplicarMirada();
 
+// niebla por distancia real (no por profundidad de pantalla): en el Quest la bruma de las sierras «saltaba» al girar la cabeza
+THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n\tvFogDepth = length( mvPosition.xyz );\n#endif';
 const ambiente = crearEscenario(escena);
 // Entorno de reflejos procedural (cielo/horizonte/suelo) para que metales y vidrios del avión y la cisterna no queden opacos.
 {
@@ -68,6 +71,17 @@ piloto.visible = false;   // 29/9: en el visor se lo veía parado sobre el ala; 
 // personas escaneadas (Sketchfab, CC BY) para el vecino y el periodista; el resto, procedurales
 const MODELOS_PERSONA = {};
 for (const [tipo, url, op] of [['vecino', './vecino.glb', {}], ['periodista', './periodista.glb', { camara: true }], ['bombero', './bombero.glb', {}]]) { try { MODELOS_PERSONA[tipo] = { gltf: await cargarGLB(url), op }; } catch (e) { console.warn(url, 'no cargó', e); } }
+// Personas articuladas (Tripo + esqueleto, el mismo personal de rampa del juego de señaleros) para el brigadista y el
+// compañero de apoyo: caminan moviendo las piernas en vez de deslizarse. Mira a +x como las demás personas.
+async function crearPersonaRig() {
+  const gltf = await cargarGLB('./senalero.glb'); const p = new THREE.Group(); p.name = 'persona-rig';
+  const fig = crearSenaleroGLB(gltf, { alto: 1.74 }); fig.rotation.y = Math.PI / 2; p.add(fig);
+  fig.children.forEach(c => { if (c !== gltf.scene) c.visible = false; });   // sin paletas
+  const estado = { caminando: false };
+  p.userData = { estado, actualizar(dt) { fig.userData.caminar(estado.caminando ? 1.4 : 0); fig.userData.actualizar(dt); } };
+  return p;
+}
+const RIG = {}; try { RIG.brigadista = await crearPersonaRig(); RIG.apoyo = await crearPersonaRig(); } catch (e) { console.warn('senalero.glb no cargó', e); }
 const posAcople = avion.getObjectByName(LADO_CARGA === 'derecho' ? 'acople-carga-derecho' : 'acople-carga').getWorldPosition(new THREE.Vector3());
 
 const ESTACIONAMIENTO = { pos: V(-7.5, 0, 19.5), rumbo: 0.05 };     // A VALIDAR con AAXOD: lugar de la camioneta durante la carga
@@ -204,7 +218,7 @@ function proxy(radio, padre, pos = V(0, 0, 0)) {
   m.position.copy(pos); padre.add(m); return m;
 }
 function persona(tipo, inicio, destino, salida, vel = 1.25) {
-  const p = MODELOS_PERSONA[tipo] ? crearPersonaGLB(MODELOS_PERSONA[tipo].gltf, MODELOS_PERSONA[tipo].op) : crearPersona(tipo); p.position.copy(inicio); p.visible = false; escena.add(p);
+  const p = RIG[tipo] || (MODELOS_PERSONA[tipo] ? crearPersonaGLB(MODELOS_PERSONA[tipo].gltf, MODELOS_PERSONA[tipo].op) : crearPersona(tipo)); p.position.copy(inicio); p.visible = false; escena.add(p);
   const hit = proxy(0.75, p, V(0, 1.0, 0));
   return { obj: p, hit, inicio, destino, salida, vel, fase: 'oculto',
     aparecer() { p.position.copy(inicio); p.visible = true; this.fase = 'entra'; },
@@ -226,6 +240,27 @@ actores.curioso.actualizar = function (dt) {
   if (this.fase === 'entra') { if (caminarHacia(p, this.destino, this.vel, dt)) { [this.inicio, this.destino] = [this.destino, this.inicio]; } }
   else if (this.fase === 'sale') { if (caminarHacia(p, V(-13, 0, 30), 1.4, dt)) { p.visible = false; this.fase = 'oculto'; } }
 };
+
+// Fin de la carga: el compañero de apoyo camina desde la motobomba hasta la válvula (por detrás del ala, lejos de la
+// hélice), desconecta la manguera y se retira; recién entonces empieza el rodaje.
+const desconexion = (() => {
+  const ap = RIG.apoyo || crearPersona('brigadista'); ap.visible = false; escena.add(ap);
+  const manguera = equipo.getObjectByName('manguera-impulsion');
+  const DESDE = V(POS_BOMBA.x - 1.5, 0, POS_BOMBA.z + 2.5), VALVULA = V(posAcople.x - 0.35, 0, posAcople.z + 1.25), VUELTA = V(POS_BOMBA.x - 2.5, 0, POS_BOMBA.z + 3.5);
+  let fase = null, t = 0;
+  return {
+    get activa() { return !!fase; },
+    reset() { fase = null; ap.visible = false; if (manguera) manguera.visible = true; },
+    empezar() { fase = 'va'; t = 0; ap.position.copy(DESDE); ap.visible = true; },
+    actualizar(dt) {
+      ap.userData.actualizar(dt);
+      if (fase === 'va') { if (caminarHacia(ap, VALVULA, 1.3, dt)) { fase = 'desconecta'; t = 0; } return 'El apoyo va a la válvula (por detrás del ala)'; }
+      if (fase === 'desconecta') { t += dt; const d = V(posAcople.x - ap.position.x, 0, posAcople.z - ap.position.z); ap.rotation.y = Math.atan2(-d.z, d.x);
+        if (t > 2.5 && manguera?.visible) manguera.visible = false; if (t > 3.5) fase = 'vuelve'; return 'Desconecta la manguera'; }
+      if (fase === 'vuelve') { if (caminarHacia(ap, VUELTA, 1.5, dt)) { fase = null; ap.visible = false; celebrando = true; despegue.empezar({ mangueraRetirada: true }); } return 'Se aleja del avión'; }
+      return null;
+    } };
+})();
 
 // Celular: suena a tu lado, a la altura de la cintura
 {
@@ -372,11 +407,11 @@ function panelFin() {
   avion.userData.ponerMotor(true);
   panel.mostrar({
     eyebrow: 'Carga terminada', titulo: 'Sector controlado. El avión sale a la misión.',
-    texto: ['El piloto te saluda: carga completa. Retirá la manguera y mirá cómo rueda hacia la pista y despega.'],
+    texto: ['Carga completa. Tu compañero de apoyo va a desconectar la manguera de la válvula; recién después el avión rueda hacia la pista y despega.'],
     botones: [{ texto: 'Ver el despegue', id: 'despegue' }], altoBoton: 80,
   });
   colocarPanel(panel, 1.45, 0.02);
-  accionPanel = () => { panel.ocultar(); celebrando = true; despegue.empezar(); };
+  accionPanel = () => { panel.ocultar(); desconexion.empezar(); };
 }
 function panelNota() {
   pausa = true; celebrando = false;
@@ -406,7 +441,7 @@ function panelConstancia() {
 function reiniciar() {
   for (const a of Object.values(actores)) { a.retirar(); if (a.obj.isGroup && a.fase !== undefined) { a.obj.visible = false; a.fase = 'oculto'; } }
   actores.piloto.retirar();
-  mision.reset(); despegue.reset(); constancia.ocultar(); celebrando = false; panel.mesh.scale.set(1, 1, 1); avion.userData.ponerMotor(true);
+  mision.reset(); desconexion.reset(); despegue.reset(); constancia.ocultar(); celebrando = false; panel.mesh.scale.set(1, 1, 1); avion.userData.ponerMotor(true);
   caminata.reset(); marcaValvula.visible = marcaPuesto.visible = false; marcaTeleport.visible = false; if (renderer.xr.isPresenting) modoVR = null;
   llegada.reset(); manejo.activo = false; manejo.colocar(ESTACIONAMIENTO.pos.x, ESTACIONAMIENTO.pos.z, ESTACIONAMIENTO.rumbo); conjunto.userData.cisterna.rotation.y = 0.12;
   if (rig.parent !== escena) bajarDeLaCamioneta();
@@ -548,6 +583,7 @@ renderer.setAnimationLoop(() => {
   avion.userData.actualizar(dt);
   ambiente.actualizar(dt);
   let textoDespegue = null;
+  if (desconexion.activa) textoDespegue = desconexion.actualizar(dt);
   if (celebrando) {
     textoDespegue = despegue.actualizar(dt);
     if (!renderer.xr.isPresenting && !arrastre) { // en PC/celular la cámara sigue al avión
@@ -602,5 +638,5 @@ renderer.setAnimationLoop(() => {
 addEventListener('resize', () => { camara.aspect = innerWidth / innerHeight; camara.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 panelIntro();
-window.__juego = { mision, actores, panel, camara, empezar, probar, EVENTOS, llegada, manejo, entrada, empezarLlegada, conjunto, rig, caminata, empezarCaminata, posAcople, despegue, constancia, panelFin, panelNota, panelConstancia, avion, accion: id => accionPanel && accionPanel(id),
+window.__juego = { desconexion, mision, actores, panel, camara, empezar, probar, EVENTOS, llegada, manejo, entrada, empezarLlegada, conjunto, rig, caminata, empezarCaminata, posAcople, despegue, constancia, panelFin, panelNota, panelConstancia, avion, accion: id => accionPanel && accionPanel(id),
   mirar(p) { const c = camara.getWorldPosition(new THREE.Vector3()); yaw = Math.atan2(-(p.x - c.x), -(p.z - c.z)); pitch = Math.atan2(p.y - c.y, Math.hypot(p.x - c.x, p.z - c.z)); aplicarMirada(); camara.updateMatrixWorld(); } };
