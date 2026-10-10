@@ -73,15 +73,49 @@ const MODELOS_PERSONA = {};
 for (const [tipo, url, op] of [['vecino', './vecino.glb', {}], ['periodista', './periodista.glb', { camara: true }], ['bombero', './bombero.glb', {}]]) { try { MODELOS_PERSONA[tipo] = { gltf: await cargarGLB(url), op }; } catch (e) { console.warn(url, 'no cargó', e); } }
 // Personas articuladas (Tripo + esqueleto, el mismo personal de rampa del juego de señaleros) para el brigadista y el
 // compañero de apoyo: caminan moviendo las piernas en vez de deslizarse. Mira a +x como las demás personas.
-async function crearPersonaRig() {
+// Caracterización: el mismo modelo de rampa recoloreado por zonas de color de la textura (chaleco lima, azul, franjas,
+// casco blanco) para que sea periodista, vecino o bombero. Conserva el sombreado (escala por la luminosidad original).
+const LOOKS = {
+  periodista: { lima: '#c2b08f', azul: '#7d98bf', franjas: '#c2b08f', casco: '#3a2a1f', camara: true },   // chaleco de fotógrafo beige, camisa celeste, pelo castaño
+  vecino: { lima: '#a2392f', azul: '#4b6b9a', franjas: '#a2392f', casco: '#7b776f' },                      // camisa roja, jean, canoso
+  bombero: { lima: '#a88b55', azul: '#1f2a44', casco: '#d8a300' },                                        // equipo estructural caqui con reflectivos, casco amarillo
+};
+function caracterizarTextura(map, look) {
+  const img = map.image, W = img.width, H = img.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, W, H), px = d.data;
+  const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const T = Object.fromEntries(Object.entries(look).filter(([, v]) => typeof v === 'string').map(([k, v]) => [k, rgb(v)]));
+  const pintar = (i, c, k) => { px[i] = Math.min(255, c[0] * k); px[i + 1] = Math.min(255, c[1] * k); px[i + 2] = Math.min(255, c[2] * k); };
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), v = mx, sat = mx ? (mx - mn) / mx : 0;
+    let h = 0; if (mx !== mn) { if (mx === r) h = 60 * (((gg - b) / (mx - mn)) % 6); else if (mx === gg) h = 60 * ((b - r) / (mx - mn) + 2); else h = 60 * ((r - gg) / (mx - mn) + 4); } if (h < 0) h += 360;
+    if (T.lima && h >= 50 && h <= 115 && sat > 0.35 && v > 0.35) pintar(i, T.lima, v / 0.9);
+    else if (T.azul && h >= 200 && h <= 255 && sat > 0.45) pintar(i, T.azul, v / 0.85);
+    else if (T.casco && sat < 0.12 && v > 0.88) pintar(i, T.casco, v / 0.97);
+    else if (T.franjas && sat < 0.18 && v > 0.55) pintar(i, T.franjas, v / 0.8);
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.flipY = map.flipY; t.colorSpace = map.colorSpace; t.wrapS = map.wrapS; t.wrapT = map.wrapT; t.anisotropy = 4; return t;
+}
+async function crearPersonaRig(tipo = null) {
   const gltf = await cargarGLB('./senalero.glb'); const p = new THREE.Group(); p.name = 'persona-rig';
-  const fig = crearSenaleroGLB(gltf, { alto: 1.74 }); fig.rotation.y = Math.PI / 2; p.add(fig);
+  const look = tipo && LOOKS[tipo];
+  if (look) gltf.scene.traverse(o => { if (o.isMesh && o.material?.map) { o.material = o.material.clone(); o.material.map = caracterizarTextura(o.material.map, look); } });
+  const fig = crearSenaleroGLB(gltf, { alto: tipo === 'vecino' ? 1.70 : 1.74 }); fig.rotation.y = Math.PI / 2; p.add(fig);
   fig.children.forEach(c => { if (c !== gltf.scene) c.visible = false; });   // sin paletas
+  if (look?.camara) {   // cámara de fotos/video a la altura del pecho
+    const cam = new THREE.Group(), negro = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+    cam.add(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.13), negro));
+    const obj = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.17, 10), negro); obj.rotation.z = Math.PI / 2; obj.position.x = 0.19; cam.add(obj);
+    cam.position.set(0.26, 1.12, -0.2); p.add(cam);
+  }
   const estado = { caminando: false };
   p.userData = { estado, actualizar(dt) { fig.userData.caminar(estado.caminando ? 1.4 : 0); fig.userData.actualizar(dt); } };
   return p;
 }
-const RIG = {}; try { RIG.brigadista = await crearPersonaRig(); RIG.apoyo = await crearPersonaRig(); } catch (e) { console.warn('senalero.glb no cargó', e); }
+// Todos los que participan son el mismo personaje articulado, caracterizado para cada papel (pedido de Iván, 10/10)
+const RIG = {};
+for (const tipo of ['brigadista', 'apoyo', 'periodista', 'vecino', 'bombero']) { try { RIG[tipo] = await crearPersonaRig(tipo); } catch (e) { console.warn('persona articulada no cargó', tipo, e); } }
 const posAcople = avion.getObjectByName(LADO_CARGA === 'derecho' ? 'acople-carga-derecho' : 'acople-carga').getWorldPosition(new THREE.Vector3());
 
 const ESTACIONAMIENTO = { pos: V(-7.5, 0, 19.5), rumbo: 0.05 };     // A VALIDAR con AAXOD: lugar de la camioneta durante la carga
