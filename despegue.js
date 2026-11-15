@@ -13,6 +13,10 @@ const ACEL = 6;          // m/s² en la carrera de despegue
 export class Despegue {
   constructor(avion, piloto, { sonidoTurbina = null, manguera = null } = {}) {
     this.avion = avion; this.piloto = piloto; this.sonido = sonidoTurbina; this.manguera = manguera;
+    // El GLB viene en tres puntos (la cola apoyada): con la nariz arriba sobre las ruedas principales la cola se hundía en la
+    // pista (15/11: hasta 0,90 m). Actitud y brazo de la rueda de cola salen del avión (el nuevo trae medidas y anclajes).
+    this.actitud = THREE.MathUtils.degToRad(avion.userData.medidas?.actitud_grados ?? 6.97);
+    this.brazoCola = -(avion.getObjectByName('rueda-cola')?.position.x ?? -7.04);
     this.reset();
   }
   reset() {
@@ -46,14 +50,18 @@ export class Despegue {
       this.rumbo = Math.min(Math.PI / 2, this.rumbo + (this.v / RADIO) * dt);
       if (this.rumbo >= Math.PI / 2) { this.fase = 'carrera'; this.pos.x = X_PISTA; }
     } else if (this.fase === 'carrera') {
+      // avión de rueda de cola: con la velocidad se levanta la cola (fuselaje horizontal = −actitud) y en la rotación la
+      // nariz sube un poco, siempre con la cola en el aire
       this.v += ACEL * dt;
-      if (this.v > V_ROTACION) this.cabeceo = Math.min(0.16, this.cabeceo + 0.12 * dt);
+      const S = THREE.MathUtils.smoothstep;
+      this.cabeceo = -this.actitud * S(this.v, 14, 26) + 0.08 * S(this.v, V_ROTACION, V_DESPEGUE);
       if (this.v > V_DESPEGUE) { this.fase = 'vuelo'; this.t = 0; }
     } else if (this.fase === 'vuelo') {
       this.v = Math.min(60, this.v + 2 * dt);
-      this.cabeceo = Math.min(0.2, this.cabeceo + 0.08 * dt);
       this.vy = Math.min(9, this.vy + 3 * dt);
       this.altura += this.vy * dt;
+      const tope = Math.asin(THREE.MathUtils.clamp((this.altura - 0.05) / this.brazoCola, -1, 1));   // la cola no baja del piso
+      this.cabeceo = Math.min(0.2, this.cabeceo + 0.08 * dt, Math.max(tope, this.cabeceo));
       if (this.t > 5) this.alabeo = Math.max(-0.35, this.alabeo - 0.15 * dt);      // se inclina hacia el incendio
       if (this.t > 5) this.rumbo += 0.04 * dt;
       if (this.t > 22 || this.altura > 260) { this.fase = 'fin'; if (this.sonido && this.sonido.isPlaying) this.sonido.stop(); }

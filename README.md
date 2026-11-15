@@ -4,9 +4,9 @@ Juego WebXR de apoyo terrestre durante la carga de agua de un Air Tractor AT-802
 Se juega en computadora, celular y Meta Quest (botón «Entrar en VR»).
 
 - Contenido basado en el MOE Vol. I de AAXOD (Procedimientos Estándar de Operación AT8T). **A validar por la Dirección de Operaciones.**
-- Avión: `at802.js`, modelo procedural (base ChatGPT rev. 04, corregido por AURAV con las fotos del AT-802 de AAXOD del 24/9/2026: franjas, deriva, cabina, válvulas de carga). Camioneta y cisterna: `frontier.js` y `cisterna.js` (procedurales, ChatGPT rev. 04). Personas y sonidos: modelados en código por AURAV. Sin modelos ni sonidos de terceros.
+- Avión: el mismo AT-802 del simulador de cabina (ver «Avión», abajo); si no carga, el procedural `at802.js`. Camioneta y cisterna: `frontier.js` y `cisterna.js` (procedurales, ChatGPT rev. 04). Personas y sonidos: modelados en código por AURAV.
 - Escenario: plataforma, pista, hangares y paisaje compartidos con «La vuelta al avión» (`aurav-prevuelo`), para que los dos juegos ocurran en el mismo aeródromo.
-- Carga por la válvula derecha (`LADO_CARGA` en `main.js`); en AAXOD se carga por cualquiera de las dos según la posición en plataforma.
+- Carga desde el lado derecho (`LADO_CARGA` en `main.js`): la manguera llega por debajo de la panza a la boca de carga del avión (la del AT-802 de AAXOD de las fotos: un caño centro-izquierda, detrás de la tolva). La marca de la válvula y el apoyo quedan al costado del fuselaje, del lado de la carga.
 - Three.js 0.180.0 (licencia MIT) incluido en el repositorio: no se descarga de ningún CDN.
 - `mision.js` es la única autoridad del juego; la interfaz pregunta y obedece.
 
@@ -17,9 +17,14 @@ Se juega en computadora, celular y Meta Quest (botón «Entrar en VR»).
 - **Etapa 3 · Control del sector** (`mision.js`): las 8 situaciones durante la carga.
 - La intro permite empezar por la etapa 1, la 2 o ir directo a la carga; las etapas se encadenan 1 → 2 → 3. El resultado final incluye las tres notas.
 
-## Avión Tripo
+## Avión
 
-`at802.glb` es el AT-802 generado con Tripo (H3.1, en partes) a partir de las fotos del hangar de AAXOD, procesado con `procesar.mjs`/`retocar.mjs` (en el proyecto de Claude): sin barra de aspersión, textura retocada (techo de la nariz y panza), escala 18,06 m, largo comprimido 0,86, actitud de tres puntos 6,8°, hélice en el nodo `helice`, ~69.000 triángulos, textura JPEG 2K. Lo carga `at802glb.js` (GLTFLoader local); si falla, `main.js` vuelve al modelo procedural `at802.js`. Licencia: generado por AURAV con Tripo (plan pago, uso comercial permitido).
+Desde el 15/11, `at802.glb` es el mismo AT-802 del simulador de cabina (`aurav-cabina-at802`): exterior, cúpula y cabina liviana
+(2,5 MB, 71 k triángulos, 9 llamadas), en actitud de tres puntos, con la hélice en el nodo `helice` y los anclajes como nodos del GLB
+(`acople-carga`, `cabina-piloto`, `ojo-piloto`, `nariz`, ruedas, punteras). Lo exporta `herramientas/avion_juegos.py` de ese repo
+(ver `juegos/LEEME.md` allá); para cambiarlo se corre ahí, se copia acá y se sube `V_AVION` en `at802glb.js`. Lo carga
+`at802glb.js`; si falla, `main.js` vuelve al modelo procedural `at802.js`. El exterior sale de un modelo freeware de simulador
+(familia FSN): uso interno. El despegue (`despegue.js`) levanta la cola en la carrera, como un avión de rueda de cola.
 
 ## Modelos de terceros (Sketchfab, licencia CC BY 4.0 — se debe mantener este crédito)
 

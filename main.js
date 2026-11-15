@@ -2,7 +2,7 @@
 // La interfaz pregunta; mision.js decide.
 import * as THREE from './three.module.js';
 import { crearAT802 } from './at802.js?v=20261006a';
-import { crearAT802GLB } from './at802glb.js?v=20261006a';
+import { crearAT802GLB } from './at802glb.js?v=20261115a';
 import { crearConjunto } from './vehiculos.js?v=20261006a';
 import { crearEscenario, crearZonas, crearEquipoCarga } from './escenario.js?v=20261010a';
 import { crearPersona, crearPiloto, caminarHacia, cargarGLB, crearPersonaGLB, crearPilotoGLB } from './personajes.js?v=20261006a';
@@ -12,7 +12,7 @@ import { Mision, EVENTOS } from './mision.js?v=20261006a';
 import { Llegada, TEXTOS as TXT_LLEGADA } from './llegada.js?v=20261006a';
 import { Manejo, Entrada } from './manejo.js?v=20261006a';
 import { Caminata, TEXTOS as TXT_CAMINATA } from './caminata.js?v=20261006a';
-import { Despegue } from './despegue.js?v=20261010a';
+import { Despegue } from './despegue.js?v=20261115a';
 import { Constancia } from './constancia.js?v=20261006a';
 import { crearSenaleroGLB } from './senalero.js?v=20261010a';
 
@@ -117,6 +117,10 @@ async function crearPersonaRig(tipo = null) {
 const RIG = {};
 for (const tipo of ['brigadista', 'apoyo', 'periodista', 'vecino', 'bombero']) { try { RIG[tipo] = await crearPersonaRig(tipo); } catch (e) { console.warn('persona articulada no cargó', tipo, e); } }
 const posAcople = avion.getObjectByName(LADO_CARGA === 'derecho' ? 'acople-carga-derecho' : 'acople-carga').getWorldPosition(new THREE.Vector3());
+// Dónde se para la gente que va a la válvula: al costado del fuselaje, del lado de la carga, y nunca más adentro que
+// `minimo` del eje del avión (15/11: la válvula real del avión nuevo está 0,29 m a la izquierda del eje, debajo de la panza).
+const SIGNO_CARGA = LADO_CARGA === 'derecho' ? 1 : -1;
+const juntoValvula = (d, minimo, dx = 0) => V(posAcople.x + dx, 0, SIGNO_CARGA > 0 ? Math.max(posAcople.z + d, minimo) : Math.min(posAcople.z - d, -minimo));
 
 const ESTACIONAMIENTO = { pos: V(-7.5, 0, 19.5), rumbo: 0.05 };     // A VALIDAR con AAXOD: lugar de la camioneta durante la carga
 const INICIO_LLEGADA = { pos: V(40, 0, 22), rumbo: Math.PI };         // llega desde adelante-derecha, con la nariz del avión a la vista
@@ -132,7 +136,7 @@ const manejo = new Manejo(conjunto), entrada = new Entrada();
 const llegada = new Llegada({ pos: V(0.4, 0, 0), rumbo: 0 }, ESTACIONAMIENTO.pos);
 const ASIENTO_CHOFER = conjunto.userData.asiento ? V(...conjunto.userData.asiento) : V(-0.35, -0.2, -0.42); // respecto del origen de la camioneta (piso); la cámara suma su propia altura
 // ---------- Etapa 2: aproximación a pie
-const caminata = new Caminata({ pos: V(0.4, 0, 0), rumbo: 0 }, posAcople.clone().setY(0), POS_JUGADOR);
+const caminata = new Caminata({ pos: V(0.4, 0, 0), rumbo: 0 }, juntoValvula(0.9, 1.25), POS_JUGADOR);   /* llega a la marca de la válvula (al costado del fuselaje) */
 const VEL_CAMINAR = 1.6;
 const velCaminar = new THREE.Vector2();
 // Movimiento en VR: 'suave' (palanca izquierda camina, derecha gira suave) o 'teleport' (apuntar al piso y gatillo; giro de a 45°).
@@ -176,7 +180,7 @@ function marcador(color) {
   escena.add(g); return g;
 }
 const marcaValvula = marcador(0x29b6f6), marcaPuesto = marcador(0x2fbf4a);
-marcaValvula.position.set(posAcople.x, 0, posAcople.z + 0.9); marcaPuesto.position.copy(POS_JUGADOR);
+marcaValvula.position.copy(juntoValvula(0.9, 1.25)); marcaPuesto.position.copy(POS_JUGADOR);
 function panelIntroCaminata() {
   pausa = true;
   panel.mostrar({ eyebrow: 'Etapa 2 · Aproximación a pie', titulo: 'Caminá hasta la válvula', texto: TXT_CAMINATA.intro, botones: [{ texto: 'Empezar a caminar', id: 'caminar' }] });
@@ -280,7 +284,7 @@ actores.curioso.actualizar = function (dt) {
 const desconexion = (() => {
   const ap = RIG.apoyo || crearPersona('brigadista'); ap.visible = false; escena.add(ap);
   const manguera = equipo.getObjectByName('manguera-impulsion');
-  const DESDE = V(POS_BOMBA.x - 1.5, 0, POS_BOMBA.z + 2.5), VALVULA = V(posAcople.x - 0.35, 0, posAcople.z + 1.25), VUELTA = V(POS_BOMBA.x - 2.5, 0, POS_BOMBA.z + 3.5);
+  const DESDE = V(POS_BOMBA.x - 1.5, 0, POS_BOMBA.z + 2.5), VALVULA = juntoValvula(1.25, 1.6, -0.35), VUELTA = V(POS_BOMBA.x - 2.5, 0, POS_BOMBA.z + 3.5);
   let fase = null, t = 0;
   return {
     get activa() { return !!fase; },

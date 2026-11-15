@@ -1,23 +1,25 @@
-// AT-802 de AAXOD: modelo de simulador de vuelo (compartido gratis por su diseñador en Telegram, 30/9/2026),
-// convertido y repintado con el esquema real por AURAV (herramientas/obj-a-glb.mjs + pintar-sim.mjs): envergadura
-// 18,04 m, +x nariz, +z derecha, origen en el suelo entre las ruedas principales, actitud de tres puntos,
-// hélice en el nodo 'helice' (gira sobre su x), 45.000 triángulos, texturas 2K.
-// Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar, y los anclajes
-// 'acople-carga', 'acople-carga-derecho', 'cabina-piloto' y 'helice'.
+// AT-802 de AURAV: el MISMO avión del simulador de cabina (repo aurav-cabina-at802): exterior, cúpula y cabina liviana,
+// exportado por herramientas/avion_juegos.py de ese repo (15/11) en el marco de este juego: +x nariz, +y arriba, +z derecha,
+// origen en el piso en el apoyo de las ruedas principales, actitud de tres puntos horneada (7,18°), 18,06 m de envergadura.
+// Hélice en helice-eje → helice (gira con helice.rotation.x); los anclajes vienen como nodos del GLB (acople-carga,
+// acople-carga-derecho, cabina-piloto, ojo-piloto, nariz, rueda-izq/der/cola, puntera-izq/der) y las medidas en
+// userData.medidas. at802-lod.glb es la versión liviana (sin cabina, 15 k triángulos) para los estacionados.
+// Si se carga un GLB viejo (el de simulador del 30/9, sin esos nodos) se arma como antes, con los anclajes de abajo.
+// Expone la misma API que el modelo procedural de at802.js: userData.ponerMotor / actualizar.
 import * as THREE from './three.module.js';
 import { GLTFLoader } from './GLTFLoader.js?v=20261006a';
 
-// Anclajes en coordenadas del avión (metros). Válvulas: bajo la panza detrás de la tolva (fotos AAXOD 24/9).
-// Panza de la tolva a y≈0,75 en x=−1,6 (medido en el modelo del simulador).
-const ANCLAJES = {
-  'acople-carga': [-3.52, 0.715, -0.525],       // boca del camlock de cada válvula del modelo (medida: punta en y 0,728, |z| 0,52)
+export const V_AVION = '20261115a';   // versión de los GLB del avión: subirla cada vez que cambien (el Quest cachea)
+
+// Anclajes del GLB viejo (marco del avión, metros): sólo se crean si el GLB no los trae.
+const ANCLAJES_VIEJOS = {
+  'acople-carga': [-3.52, 0.715, -0.525],
   'acople-carga-derecho': [-3.52, 0.715, 0.525],
   'cabina-piloto': [-1.7, 1.78, 0],
 };
-const ACTITUD = Math.atan2(0.86, 7.04);   // cabeceo de tres puntos del modelo
-const HELICE = { pos: [2.78, 2.16, 0], cabeceo: 0.10 };   // raíz de las palas (dentro del cono de la maqueta, que va de x 2,5 a 3,19) y elevación del eje
+const HELICE_VIEJA = { pos: [2.78, 2.16, 0], cabeceo: 0.10 };
 
-// Hélice de código (la maqueta la tenía rota): 5 palas negras con puntas blancas. El cono (spinner) es el de la maqueta.
+// Hélice de código para un GLB sin nodo 'helice': 5 palas negras con puntas blancas.
 function crearHelice() {
   const g = new THREE.Group(); g.name = 'helice';
   const negro = new THREE.MeshStandardMaterial({ color: 0x181b1d, roughness: 0.7 }), blanco = new THREE.MeshStandardMaterial({ color: 0xf0f0ec, roughness: 0.6 });
@@ -30,32 +32,43 @@ function crearHelice() {
   return g;
 }
 
-function matricula(texto) {
-  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 192; const g = cv.getContext('2d');
-  g.clearRect(0, 0, 1024, 192); g.fillStyle = '#2a2a2c'; g.font = 'bold 150px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(texto, 512, 96, 960);
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.4, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+// Materiales del avión nuevo: se respetan los del GLB (los mismos colores del simulador). Los vidrios no escriben
+// profundidad y van después de lo opaco (como en la cabina) y no dan sombra; la cabina tampoco (está bajo la cúpula),
+// pero la recibe. También lo usa plataforma.js para los estacionados (LOD).
+export function prepararAvion(raiz) {
+  const cabina = raiz.getObjectByName('cabina');
+  raiz.traverse(o => {
+    if (!o.isMesh) return; o.receiveShadow = true;
+    let enCabina = false; for (let p = o; p; p = p.parent) if (p === cabina) { enCabina = true; break; }
+    if (o.material.transparent) { o.material.depthWrite = false; o.renderOrder = 2; o.castShadow = false; } else o.castShadow = !enCabina;
+  });
 }
+export const esAvionNuevo = raiz => raiz.getObjectByName('at802')?.userData?.origen === 'aurav-cabina-at802';
 
-export async function crearAT802GLB({ matricula: mat = 'AUR-AV', url = './at802.glb' } = {}) {
+export async function crearAT802GLB({ url = `./at802.glb?v=${V_AVION}` } = {}) {
   const gltf = await new GLTFLoader().loadAsync(url);
   const avion = new THREE.Group(); avion.name = 'AT-802';
   const modelo = gltf.scene; avion.add(modelo);
-  modelo.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) { o.material.roughness = 0.42; o.material.metalness = 0.05; o.material.side = THREE.DoubleSide; o.material.envMapIntensity = 0.9; } } });
+  const datos = modelo.getObjectByName('at802')?.userData || {};
+  const nuevo = esAvionNuevo(modelo);
+  if (nuevo) prepararAvion(modelo);
+  else modelo.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) { o.material.roughness = 0.42; o.material.metalness = 0.05; o.material.side = THREE.DoubleSide; o.material.envMapIntensity = 0.9; } } });
 
   let helice = modelo.getObjectByName('helice');
-  if (!helice) { helice = crearHelice(); helice.position.set(...HELICE.pos); helice.rotation.z = HELICE.cabeceo; avion.add(helice); }
-  for (const [nombre, pos] of Object.entries(ANCLAJES)) { const a = new THREE.Object3D(); a.name = nombre; a.position.set(...pos); avion.add(a); }
-  // (la matrícula AUR-AV va pintada en la textura del fuselaje: herramientas/pintar-sim.mjs)
-  // (las válvulas de carga son las del propio modelo: caño blanco bajo la panza con palanca y camlock, x≈−3,5)
-  // disco de hélice en marcha
-  const disco = new THREE.Mesh(new THREE.CircleGeometry(1.45, 40), new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
-  disco.name = 'disco'; disco.visible = false;
+  if (!helice) { helice = crearHelice(); helice.position.set(...HELICE_VIEJA.pos); helice.rotation.z = HELICE_VIEJA.cabeceo; avion.add(helice); }
+  for (const [nombre, pos] of Object.entries(ANCLAJES_VIEJOS)) {
+    if (modelo.getObjectByName(nombre)) continue;
+    const a = new THREE.Object3D(); a.name = nombre; a.position.set(...pos); avion.add(a);
+  }
+  // disco de hélice en marcha (del radio de las palas)
+  const disco = new THREE.Mesh(new THREE.CircleGeometry(datos.radioHelice || 1.45, 40), new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
+  disco.name = 'disco'; disco.visible = false; disco.renderOrder = 3;
   if (helice) { helice.add(disco); disco.rotation.y = Math.PI / 2; disco.position.set(0.05, 0, 0); }
 
   avion.userData.motor = false;
   avion.userData.ponerMotor = en => { avion.userData.motor = en; disco.visible = en; };
   avion.userData.actualizar = dt => { if (avion.userData.motor && helice) helice.rotation.x += dt * 40; };
-  avion.userData.origen = 'simulador';
+  avion.userData.origen = nuevo ? 'cabina-at802' : 'simulador';
+  avion.userData.medidas = datos.medidas || null;
   return avion;
 }
