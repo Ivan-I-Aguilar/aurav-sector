@@ -360,7 +360,7 @@ function panelIntro() {
   pausa = true;
   panel.mostrar({
     eyebrow: 'AURAV · AAXOD · Prototipo de demostración', titulo: 'Control del sector',
-    texto: ['Sos el Equipo de Tierra. El AT-802 está cargando agua por la válvula derecha con el motor en marcha y vos sos responsable del sector.',
+    texto: [`Sos el Equipo de Tierra. El AT-802 está cargando agua desde el lado ${LADO_CARGA} con el motor en marcha y vos sos responsable del sector.`,
       'Durante la carga van a pasar cosas a tu alrededor. Mirá para todos lados: cuando veas algo, apuntalo y elegí qué hacer.',
       'Basado en el MOE Vol. I de AAXOD. Contenido a validar por la Dirección de Operaciones.'],
     botones: [{ texto: 'Etapa 1 · Llegar con la camioneta', id: 'llegada', fuente: 30 }, { texto: 'Etapa 2 · Acercarse a pie', id: 'caminata', fuente: 30 }, { texto: 'Etapa 3 · Ir directo a la carga', id: 'empezar', fuente: 30 }], altoBoton: 62,
